@@ -1,4 +1,4 @@
-module github.com/conduitio/conduit-connector-connectorname
+module github.com/conduitio-labs/conduit-connector-spanner
 
 go 1.22.5
 

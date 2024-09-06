@@ -1,10 +1,10 @@
 package main
 
 import (
-	connectorname "github.com/conduitio/conduit-connector-connectorname"
+	spanner "github.com/conduitio-labs/conduit-connector-spanner"
 	sdk "github.com/conduitio/conduit-connector-sdk"
 )
 
 func main() {
-	sdk.Serve(connectorname.Connector)
+	sdk.Serve(spanner.Connector)
 }
