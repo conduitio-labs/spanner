@@ -33,3 +33,6 @@ fmt:
 .PHONY: lint
 lint:
 	golangci-lint run
+
+up:
+	gcloud emulators spanner start
