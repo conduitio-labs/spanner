@@ -127,7 +127,7 @@ func SetupDatabase(ctx context.Context, t *testing.T, is *is.I) {
 		Database: databaseName,
 		Statements: []string{
 			`CREATE TABLE Singers (
-				SingerId   bigint NOT NULL PRIMARY KEY,
+				SingerId   bigserial PRIMARY KEY,
 				Name       varchar(1024),
 				CreatedAt  timestamp with time zone DEFAULT CURRENT_TIMESTAMP
 			)`,
@@ -153,33 +153,43 @@ type Singer struct {
 	CreatedAt time.Time `spanner:"CreatedAt"`
 }
 
-var SingersTable singersTable
+type SingersTable struct{}
 
-type singersTable struct{}
-
-func (singersTable) Insert(ctx context.Context, is *is.I, singer Singer) {
+func (SingersTable) Insert(ctx context.Context, is *is.I, singerName string) Singer {
 	client := NewClient(ctx, is)
 	defer client.Close()
 
+	var insertedSinger Singer
+
 	tx := func(ctx context.Context, txn *spanner.ReadWriteTransaction) error {
 		stmt := spanner.Statement{
-			SQL: `INSERT INTO Singers (SingerId, Name, CreatedAt)
-				  VALUES ($1, $2, $3)`,
+			SQL: `INSERT INTO Singers (Name)
+				  VALUES ($1)`,
 			Params: map[string]interface{}{
-				"p1": singer.SingerID,
-				"p2": singer.Name,
-				"p3": singer.CreatedAt,
+				"p1": singerName,
 			},
 		}
-		_, err := txn.Update(ctx, stmt)
-		return err
+		if _, err := txn.Update(ctx, stmt); err != nil {
+			return err
+		}
+
+		return txn.Query(ctx, spanner.Statement{
+			SQL: "SELECT * FROM Singers WHERE Name = $1",
+			Params: map[string]interface{}{
+				"p1": singerName,
+			},
+		}).Do(func(r *spanner.Row) error {
+			return r.ToStruct(&insertedSinger)
+		})
 	}
 
 	_, err := client.ReadWriteTransaction(ctx, tx)
 	is.NoErr(err)
+
+	return insertedSinger
 }
 
-func (singersTable) Update(ctx context.Context, is *is.I, singer Singer) {
+func (SingersTable) Update(ctx context.Context, is *is.I, singer Singer) {
 	client := NewClient(ctx, is)
 	defer client.Close()
 
@@ -196,21 +206,20 @@ func (singersTable) Update(ctx context.Context, is *is.I, singer Singer) {
 		}
 		_, err := txn.Update(ctx, stmt)
 		return err
-
 	}
 
 	_, err := client.ReadWriteTransaction(ctx, tx)
 	is.NoErr(err)
 }
 
-func (singersTable) Delete(ctx context.Context, is *is.I, singer Singer) {
+func (SingersTable) Delete(ctx context.Context, is *is.I, singer Singer) {
 	client := NewClient(ctx, is)
 	defer client.Close()
 
 	tx := func(ctx context.Context, txn *spanner.ReadWriteTransaction) error {
 		stmt := spanner.Statement{
 			SQL: `DELETE FROM Singers
-				WHERE SingerId = $1`,
+				  WHERE SingerId = $1`,
 			Params: map[string]interface{}{
 				"p1": singer.SingerID,
 			},
