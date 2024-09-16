@@ -1,17 +1,16 @@
-package spanner_test
+package spanner
 
 import (
 	"context"
 	"testing"
 
-	spanner "github.com/conduitio-labs/conduit-connector-spanner"
 	testutils "github.com/conduitio-labs/conduit-connector-spanner/test"
 	"github.com/matryer/is"
 )
 
 func TestTeardownSource_NoOpen(t *testing.T) {
 	is := is.New(t)
-	con := spanner.NewSource()
+	con := NewSource()
 	err := con.Teardown(context.Background())
 	is.NoErr(err)
 }
@@ -25,11 +24,21 @@ func TestSnapshot(t *testing.T) {
 	testutils.CreateInstance(ctx, t, is)
 	testutils.SetupDatabase(ctx, t, is)
 
+	var singers []testutils.Singer
+
 	singer1 := singersTable.Insert(ctx, is, "singer1")
+	singers = append(singers, singer1)
+
 	singer2 := singersTable.Insert(ctx, is, "singer2")
+	singers = append(singers, singer2)
+
 	singer3 := singersTable.Insert(ctx, is, "singer3")
+	singers = append(singers, singer3)
 
-	// start snapshot iterator
+	iterator := newSnapshotIterator()
+	defer func() { is.NoErr(iterator.Teardown(ctx)) }()
 
-	// assert read singers from records correspond
+	for _, singer := range singers {
+		testutils.ReadAndAssertSnapshot(ctx, is, iterator, singer)
+	}
 }

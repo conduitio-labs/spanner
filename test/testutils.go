@@ -13,6 +13,9 @@ import (
 	"cloud.google.com/go/spanner/admin/database/apiv1/databasepb"
 	instance "cloud.google.com/go/spanner/admin/instance/apiv1"
 	"cloud.google.com/go/spanner/admin/instance/apiv1/instancepb"
+	"github.com/conduitio-labs/conduit-connector-spanner/common"
+	"github.com/conduitio/conduit-commons/opencdc"
+	"github.com/google/go-cmp/cmp"
 	"github.com/matryer/is"
 	"github.com/rs/zerolog"
 	"google.golang.org/api/option"
@@ -153,6 +156,14 @@ type Singer struct {
 	CreatedAt time.Time `spanner:"CreatedAt"`
 }
 
+func (s Singer) ToStructuredData() opencdc.StructuredData {
+	return opencdc.StructuredData{
+		"SingerId":  s.SingerID,
+		"Name":      s.Name,
+		"CreatedAt": s.CreatedAt,
+	}
+}
+
 type SingersTable struct{}
 
 func (SingersTable) Insert(ctx context.Context, is *is.I, singerName string) Singer {
@@ -230,4 +241,34 @@ func (SingersTable) Delete(ctx context.Context, is *is.I, singer Singer) {
 
 	_, err := client.ReadWriteTransaction(ctx, tx)
 	is.NoErr(err)
+}
+
+func ReadAndAssertSnapshot(
+	ctx context.Context, is *is.I,
+	iterator common.Iterator, singer Singer,
+) opencdc.Record {
+	is.Helper()
+	rec, err := iterator.Read(ctx)
+	is.NoErr(err)
+	is.NoErr(iterator.Ack(ctx, rec.Position))
+
+	is.Equal(rec.Operation, opencdc.OperationSnapshot)
+
+	assertMetadata(is, rec.Metadata)
+
+	IsDataEqual(is, rec.Key, opencdc.StructuredData{"id": singer.SingerID})
+	IsDataEqual(is, rec.Payload.After, singer.ToStructuredData())
+
+	return rec
+}
+
+func IsDataEqual(is *is.I, a, b opencdc.Data) {
+	is.Helper()
+	is.Equal("", cmp.Diff(a, b))
+}
+
+func assertMetadata(is *is.I, metadata opencdc.Metadata) {
+	col, err := metadata.GetCollection()
+	is.NoErr(err)
+	is.Equal(col, "singers")
 }

@@ -6,9 +6,12 @@ import (
 	"context"
 	"fmt"
 
+	"cloud.google.com/go/spanner"
+	"github.com/conduitio-labs/conduit-connector-spanner/common"
 	"github.com/conduitio/conduit-commons/config"
 	"github.com/conduitio/conduit-commons/opencdc"
 	sdk "github.com/conduitio/conduit-connector-sdk"
+	"google.golang.org/api/iterator"
 )
 
 type Source struct {
@@ -97,4 +100,49 @@ func (s *Source) Teardown(_ context.Context) error {
 	// other function. After Teardown returns, the plugin should be ready for a
 	// graceful shutdown.
 	return nil
+}
+
+func getPrimaryKey(ctx context.Context, client *spanner.Client, database, table string) (common.PrimaryKeyName, error) {
+	stmt := spanner.Statement{
+		SQL: `
+            SELECT COLUMN_NAME
+            FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+            WHERE TABLE_NAME = @table
+            AND CONSTRAINT_NAME = 'PRIMARY_KEY'
+            ORDER BY ORDINAL_POSITION LIMIT 1
+        `,
+		Params: map[string]interface{}{
+			"table": table,
+		},
+	}
+
+	iter := client.Single().Query(ctx, stmt)
+	defer iter.Stop()
+
+	row, err := iter.Next()
+	if err == iterator.Done {
+		return "", fmt.Errorf("no primary key found for table %s", table)
+	}
+	if err != nil {
+		return "", fmt.Errorf("failed to get primary key from table %s: %w", table, err)
+	}
+
+	var columnName common.PrimaryKeyName
+	if err := row.Columns(&columnName); err != nil {
+		return "", fmt.Errorf("failed to scan primary key from table %s: %w", table, err)
+	}
+
+	return columnName, nil
+}
+
+func getTableKeys(ctx context.Context, client *spanner.Client, database string, tables []string) (common.TableKeys, error) {
+	tableKeys := make(common.TableKeys)
+	for _, table := range tables {
+		primaryKey, err := getPrimaryKey(ctx, client, table, database)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get primary key for table %q: %w", table, err)
+		}
+		tableKeys[common.TableName(table)] = primaryKey
+	}
+	return tableKeys, nil
 }
