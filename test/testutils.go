@@ -35,6 +35,10 @@ var (
 	databaseName = fmt.Sprint("projects/", projectID, "/instances/", instanceID, "/databases/", databaseID)
 )
 
+var TableKeys = common.TableKeys{
+	"singers": "SingerID",
+}
+
 func NewClient(ctx context.Context, is *is.I) *spanner.Client {
 	is.Helper()
 
@@ -70,18 +74,20 @@ func NewInstanceAdminClient(ctx context.Context, is *is.I) *instance.InstanceAdm
 }
 
 func CreateInstance(ctx context.Context, t *testing.T, is *is.I) {
-	is.Helper()
+	t.Helper()
 
 	client := NewInstanceAdminClient(ctx, is)
+
+	instanceConfig := new(instancepb.Instance)
+	instanceConfig.Name = databaseName
+	instanceConfig.Config = fmt.Sprintf("projects/%s/instanceConfigs/emulator-config", projectID)
+	instanceConfig.DisplayName = "Test Instance"
+	instanceConfig.NodeCount = 1
 
 	op, err := client.CreateInstance(ctx, &instancepb.CreateInstanceRequest{
 		Parent:     fmt.Sprintf("projects/%s", projectID),
 		InstanceId: instanceID,
-		Instance: &instancepb.Instance{
-			Config:      fmt.Sprintf("projects/%s/instanceConfigs/emulator-config", projectID),
-			DisplayName: "Test Instance",
-			NodeCount:   1,
-		},
+		Instance:   instanceConfig,
 	})
 	is.NoErr(err)
 
@@ -114,9 +120,11 @@ func NewDatabaseAdminClient(ctx context.Context, is *is.I) *database.DatabaseAdm
 }
 
 func SetupDatabase(ctx context.Context, t *testing.T, is *is.I) {
-	is.Helper()
+	t.Helper()
 
 	client := NewDatabaseAdminClient(ctx, is)
+
+	//exhaustruct:ignore
 	dbOp, err := client.CreateDatabase(ctx, &databasepb.CreateDatabaseRequest{
 		Parent:          fmt.Sprintf("projects/%s/instances/%s", projectID, instanceID),
 		CreateStatement: "CREATE DATABASE `" + databaseID + "`",
@@ -126,7 +134,8 @@ func SetupDatabase(ctx context.Context, t *testing.T, is *is.I) {
 	_, err = dbOp.Wait(ctx)
 	is.NoErr(err)
 
-	updateReq := &databasepb.UpdateDatabaseDdlRequest{
+	//exhaustruct:ignore
+	opUpdate, err := client.UpdateDatabaseDdl(ctx, &databasepb.UpdateDatabaseDdlRequest{
 		Database: databaseName,
 		Statements: []string{
 			`CREATE TABLE Singers (
@@ -135,8 +144,7 @@ func SetupDatabase(ctx context.Context, t *testing.T, is *is.I) {
 				CreatedAt  timestamp with time zone DEFAULT CURRENT_TIMESTAMP
 			)`,
 		},
-	}
-	opUpdate, err := client.UpdateDatabaseDdl(ctx, updateReq)
+	})
 	is.NoErr(err)
 
 	err = opUpdate.Wait(ctx)

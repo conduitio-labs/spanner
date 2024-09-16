@@ -2,10 +2,12 @@ package spanner
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"cloud.google.com/go/spanner"
 	"github.com/conduitio-labs/conduit-connector-spanner/common"
+	"github.com/conduitio/conduit-commons/csync"
 	"github.com/conduitio/conduit-commons/opencdc"
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	"google.golang.org/api/iterator"
@@ -14,23 +16,38 @@ import (
 
 type (
 	snapshotIterator struct {
-		t       *tomb.Tomb
-		config  snapshotIteratorConfig
-		recordC chan opencdc.Record
+		t            *tomb.Tomb
+		acks         csync.WaitGroup
+		lastPosition common.SnapshotPosition
+		config       snapshotIteratorConfig
+		dataC        chan fetchData
 	}
 	snapshotIteratorConfig struct {
 		tableKeys common.TableKeys
 		client    *spanner.Client
 	}
+	fetchData struct {
+		payload    opencdc.StructuredData
+		table      common.TableName
+		primaryKey common.PrimaryKeyName
+		position   common.TablePosition
+	}
 )
 
 var _ common.Iterator = new(snapshotIterator)
+
+var ErrSnapshotIteratorDone = errors.New("snapshot complete")
 
 func newSnapshotIterator(ctx context.Context, config snapshotIteratorConfig) *snapshotIterator {
 	t, _ := tomb.WithContext(ctx)
 	iterator := &snapshotIterator{
 		t:      t,
+		acks:   csync.WaitGroup{},
 		config: config,
+		dataC:  make(chan fetchData),
+		lastPosition: common.SnapshotPosition{
+			Snapshots: map[common.TableName]common.TablePosition{},
+		},
 	}
 
 	for tableName, primaryKey := range config.tableKeys {
@@ -43,14 +60,48 @@ func newSnapshotIterator(ctx context.Context, config snapshotIteratorConfig) *sn
 }
 
 func (s *snapshotIterator) Read(ctx context.Context) (rec opencdc.Record, err error) {
-	return rec, nil
+	select {
+	case <-ctx.Done():
+		//nolint:wrapcheck // no need to wrap canceled error
+		return rec, ctx.Err()
+	case <-s.t.Dead():
+		if err := s.t.Err(); err != nil && !errors.Is(err, ErrSnapshotIteratorDone) {
+			return rec, fmt.Errorf(
+				"cannot stop snapshot mode, fetchers exited unexpectedly: %w", err)
+		}
+		if err := s.acks.Wait(ctx); err != nil {
+			return rec, fmt.Errorf("failed to wait for acks on snapshot iterator done: %w", err)
+		}
+
+		return rec, ErrSnapshotIteratorDone
+	case data := <-s.dataC:
+		s.acks.Add(1)
+		return s.buildRecord(data), nil
+	}
 }
 
-func (s *snapshotIterator) Ack(ctx context.Context, pos opencdc.Position) error {
+func (s *snapshotIterator) Ack(context.Context, opencdc.Position) error {
+	s.acks.Done()
 	return nil
 }
 
 func (s *snapshotIterator) Teardown(ctx context.Context) error {
+	s.t.Kill(ErrSnapshotIteratorDone)
+	if err := s.t.Err(); err != nil && !errors.Is(err, ErrSnapshotIteratorDone) {
+		return fmt.Errorf(
+			"cannot teardown snapshot mode, fetchers exited unexpectedly: %w", err)
+	}
+
+	if err := s.acks.Wait(ctx); err != nil {
+		return fmt.Errorf("failed to wait for snapshot acks: %w", err)
+	}
+
+	// waiting for the workers to finish will allow us to have an easier time
+	// debugging goroutine leaks.
+	_ = s.t.Wait()
+
+	sdk.Logger(ctx).Info().Msg("all workers done, teared down snapshot iterator")
+
 	return nil
 }
 
@@ -62,7 +113,6 @@ func (s *snapshotIterator) fetchTable(
 	ro := s.config.client.ReadOnlyTransaction()
 	defer ro.Close()
 
-	// fetch start end
 	start, end, err := s.fetchStartEnd(ctx, ro, tableName)
 	if err != nil {
 		return err
@@ -84,16 +134,16 @@ func (s *snapshotIterator) fetchTable(
 	iter := ro.Query(ctx, stmt)
 	defer iter.Stop()
 
-	for {
+	for ; ; start++ {
 		row, err := iter.Next()
-		if err == iterator.Done {
+		if errors.Is(err, iterator.Done) {
 			break
 		}
 		if err != nil {
 			return err
 		}
 
-		var data opencdc.StructuredData
+		data := opencdc.StructuredData{}
 		for i, column := range row.ColumnNames() {
 			var val interface{}
 			if err := row.Column(i, &val); err != nil {
@@ -102,17 +152,15 @@ func (s *snapshotIterator) fetchTable(
 			data[column] = val
 		}
 
-		var position opencdc.Position
-
-		metadata := opencdc.Metadata{
-			"table": string(tableName),
+		s.dataC <- fetchData{
+			payload:    data,
+			table:      tableName,
+			primaryKey: primaryKey,
+			position: common.TablePosition{
+				LastRead:    start,
+				SnapshotEnd: end,
+			},
 		}
-
-		var key opencdc.Data
-
-		rec := sdk.Util.Source.NewRecordSnapshot(position, metadata, key, data)
-
-		s.recordC <- rec
 	}
 
 	return nil
@@ -122,17 +170,20 @@ func (s *snapshotIterator) fetchStartEnd(
 	ctx context.Context,
 	ro *spanner.ReadOnlyTransaction,
 	tableName common.TableName,
-) (start, end int, err error) {
+) (start, end uint64, err error) {
 	query := fmt.Sprint(`
 		SELECT count(*) as count
 		FROM `, tableName,
 	)
-	stmt := spanner.Statement{SQL: query}
+	stmt := spanner.Statement{
+		SQL:    query,
+		Params: nil,
+	}
 	iter := ro.Query(ctx, stmt)
 	defer iter.Stop()
 
 	var result struct {
-		Count int `spanner:"count"`
+		Count uint64 `spanner:"count"`
 	}
 
 	row, err := iter.Next()
@@ -145,4 +196,24 @@ func (s *snapshotIterator) fetchStartEnd(
 	}
 
 	return 0, result.Count, nil
+}
+
+func (s *snapshotIterator) buildRecord(data fetchData) opencdc.Record {
+	s.lastPosition.Snapshots[data.table] = data.position
+	position := s.lastPosition.ToSDKPosition()
+
+	metadata := opencdc.Metadata{
+		"table": string(data.table),
+	}
+
+	key := opencdc.StructuredData{
+		string(data.primaryKey): data.payload[string(data.primaryKey)],
+	}
+
+	return sdk.Util.Source.NewRecordSnapshot(
+		position,
+		metadata,
+		key,
+		data.payload,
+	)
 }

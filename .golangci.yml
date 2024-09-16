@@ -57,10 +57,11 @@ linters:
     - errname
     - errorlint
     - exhaustive
+    - exhaustruct
     - exportloopref
     # - forbidigo
     - forcetypeassert
-    - funlen
+    # - funlen
     - gci
     - ginkgolinter
     - gocheckcompilerdirectives
@@ -69,7 +70,7 @@ linters:
     - goconst
     - gocritic
     - godot
-    - err113
+    # - err113
     - gofmt
     - gofumpt
     - goheader
@@ -116,5 +117,5 @@ linters:
     - usestdlibvars
     - wastedassign
     - whitespace
-    - wrapcheck
+    # - wrapcheck
     - zerologlint
