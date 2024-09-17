@@ -184,49 +184,6 @@ func (SingersTable) Insert(ctx context.Context, is *is.I, singerID int, singerNa
 	return insertedSinger
 }
 
-func (SingersTable) Update(ctx context.Context, is *is.I, singer Singer) {
-	client := NewClient(ctx, is)
-	defer client.Close()
-
-	tx := func(ctx context.Context, txn *spanner.ReadWriteTransaction) error {
-		stmt := spanner.Statement{
-			SQL: `UPDATE Singers
-				SET Name = @name, CreatedAt = @createdAt
-				WHERE SingerID = @singerID`,
-			Params: map[string]interface{}{
-				"singerID":  singer.SingerID,
-				"name":      singer.Name,
-				"createdAt": singer.CreatedAt,
-			},
-		}
-		_, err := txn.Update(ctx, stmt)
-		return err
-	}
-
-	_, err := client.ReadWriteTransaction(ctx, tx)
-	is.NoErr(err)
-}
-
-func (SingersTable) Delete(ctx context.Context, is *is.I, singer Singer) {
-	client := NewClient(ctx, is)
-	defer client.Close()
-
-	tx := func(ctx context.Context, txn *spanner.ReadWriteTransaction) error {
-		stmt := spanner.Statement{
-			SQL: `DELETE FROM Singers
-				  WHERE SingerID = @singerID`,
-			Params: map[string]interface{}{
-				"singerID": singer.SingerID,
-			},
-		}
-		_, err := txn.Update(ctx, stmt)
-		return err
-	}
-
-	_, err := client.ReadWriteTransaction(ctx, tx)
-	is.NoErr(err)
-}
-
 func ReadAndAssertSnapshot(
 	ctx context.Context, is *is.I,
 	iterator common.Iterator, singer Singer,

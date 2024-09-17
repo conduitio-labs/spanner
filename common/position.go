@@ -2,7 +2,6 @@ package common
 
 import (
 	"encoding/json"
-	"fmt"
 
 	"github.com/conduitio/conduit-commons/opencdc"
 )
@@ -48,14 +47,6 @@ func (p SnapshotPosition) Clone() SnapshotPosition {
 		newPosition.Snapshots[k] = v
 	}
 	return newPosition
-}
-
-func ParseSDKPosition(p opencdc.Position) (Position, error) {
-	var pos Position
-	if err := json.Unmarshal(p, &pos); err != nil {
-		return pos, fmt.Errorf("failed to parse position: %w", err)
-	}
-	return pos, nil
 }
 
 type SnapshotPositions map[TableName]TablePosition
