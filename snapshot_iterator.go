@@ -2,10 +2,15 @@ package spanner
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"math/big"
+	"time"
 
+	"cloud.google.com/go/civil"
 	"cloud.google.com/go/spanner"
+	"cloud.google.com/go/spanner/apiv1/spannerpb"
 	"github.com/conduitio-labs/conduit-connector-spanner/common"
 	"github.com/conduitio/conduit-commons/csync"
 	"github.com/conduitio/conduit-commons/opencdc"
@@ -27,10 +32,11 @@ type (
 		client    *spanner.Client
 	}
 	fetchData struct {
-		payload    opencdc.StructuredData
-		table      common.TableName
-		primaryKey common.PrimaryKeyName
-		position   common.TablePosition
+		payload        opencdc.StructuredData
+		table          common.TableName
+		primaryKeyName common.PrimaryKeyName
+		primaryKeyVal  any
+		position       common.TablePosition
 	}
 )
 
@@ -115,15 +121,14 @@ func (s *snapshotIterator) fetchTable(
 
 	start, end, err := s.fetchStartEnd(ctx, ro, tableName)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to fetch start and end of snapshot: %w", err)
 	}
 
 	query := fmt.Sprint(`
 		SELECT *
 		FROM `, tableName, `
 		WHERE `, primaryKey, ` > @start AND `, primaryKey, ` <= @end
-		ORDER BY `, primaryKey, ` LIMIT ?
-	`)
+		ORDER BY `, primaryKey)
 	stmt := spanner.Statement{
 		SQL: query,
 		Params: map[string]any{
@@ -140,22 +145,25 @@ func (s *snapshotIterator) fetchTable(
 			break
 		}
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to fetch next row: %w", err)
 		}
 
-		data := opencdc.StructuredData{}
-		for i, column := range row.ColumnNames() {
-			var val interface{}
-			if err := row.Column(i, &val); err != nil {
-				return err
-			}
-			data[column] = val
+		data, err := decodeRow(row)
+		if err != nil {
+			return fmt.Errorf("failed to decode row: %w", err)
+		}
+
+		primaryKeyVal, ok := data[string(primaryKey)]
+		if !ok {
+			return fmt.Errorf("primary key %s not found in row %v", primaryKey, data)
 		}
 
 		s.dataC <- fetchData{
-			payload:    data,
-			table:      tableName,
-			primaryKey: primaryKey,
+			payload:        data,
+			table:          tableName,
+			primaryKeyName: primaryKey,
+			primaryKeyVal:  primaryKeyVal,
+
 			position: common.TablePosition{
 				LastRead:    start,
 				SnapshotEnd: end,
@@ -170,7 +178,7 @@ func (s *snapshotIterator) fetchStartEnd(
 	ctx context.Context,
 	ro *spanner.ReadOnlyTransaction,
 	tableName common.TableName,
-) (start, end uint64, err error) {
+) (start, end int64, err error) {
 	query := fmt.Sprint(`
 		SELECT count(*) as count
 		FROM `, tableName,
@@ -183,7 +191,7 @@ func (s *snapshotIterator) fetchStartEnd(
 	defer iter.Stop()
 
 	var result struct {
-		Count uint64 `spanner:"count"`
+		Count int64 `spanner:"count"`
 	}
 
 	row, err := iter.Next()
@@ -202,12 +210,11 @@ func (s *snapshotIterator) buildRecord(data fetchData) opencdc.Record {
 	s.lastPosition.Snapshots[data.table] = data.position
 	position := s.lastPosition.ToSDKPosition()
 
-	metadata := opencdc.Metadata{
-		"table": string(data.table),
-	}
+	metadata := opencdc.Metadata{}
+	metadata.SetCollection(string(data.table))
 
 	key := opencdc.StructuredData{
-		string(data.primaryKey): data.payload[string(data.primaryKey)],
+		string(data.primaryKeyName): data.payload[string(data.primaryKeyName)],
 	}
 
 	return sdk.Util.Source.NewRecordSnapshot(
@@ -216,4 +223,77 @@ func (s *snapshotIterator) buildRecord(data fetchData) opencdc.Record {
 		key,
 		data.payload,
 	)
+}
+
+func decodeRow(row *spanner.Row) (opencdc.StructuredData, error) {
+	data := make(opencdc.StructuredData)
+	for i, column := range row.ColumnNames() {
+		var val interface{}
+		var err error
+		switch row.ColumnType(i).Code {
+		case spannerpb.TypeCode_BOOL:
+			var v bool
+			err = row.Column(i, &v)
+			val = v
+		case spannerpb.TypeCode_INT64:
+			var v int64
+			err = row.Column(i, &v)
+			val = v
+		case spannerpb.TypeCode_FLOAT64:
+			var v float64
+			err = row.Column(i, &v)
+			val = v
+		case spannerpb.TypeCode_FLOAT32:
+			var v float32
+			err = row.Column(i, &v)
+			val = v
+		case spannerpb.TypeCode_TIMESTAMP:
+			var v time.Time
+			err = row.Column(i, &v)
+			val = v
+		case spannerpb.TypeCode_DATE:
+			var v civil.Date
+			err = row.Column(i, &v)
+			val = v
+		case spannerpb.TypeCode_STRING:
+			var v string
+			err = row.Column(i, &v)
+			val = v
+		case spannerpb.TypeCode_BYTES:
+			var v []byte
+			err = row.Column(i, &v)
+			val = v
+		case spannerpb.TypeCode_ARRAY:
+			var v interface{}
+			err = row.Column(i, &v)
+			val = v
+		case spannerpb.TypeCode_STRUCT:
+			var v []spanner.GenericColumnValue
+			err = row.Column(i, &v)
+			val = v
+		case spannerpb.TypeCode_NUMERIC:
+			var v *big.Rat
+			err = row.Column(i, &v)
+			val = v
+		case spannerpb.TypeCode_JSON:
+			var v json.RawMessage
+			err = row.Column(i, &v)
+			val = v
+		case spannerpb.TypeCode_PROTO:
+			var v []byte
+			err = row.Column(i, &v)
+			val = v
+		case spannerpb.TypeCode_ENUM:
+			var v string
+			err = row.Column(i, &v)
+			val = v
+		default:
+			return nil, fmt.Errorf("unsupported column type for %s", column)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode column %s: %w", column, err)
+		}
+		data[column] = val
+	}
+	return data, nil
 }

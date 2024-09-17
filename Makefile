@@ -34,5 +34,10 @@ fmt:
 lint:
 	golangci-lint run
 
+.PHONY: up
 up:
-	gcloud emulators spanner start
+	docker compose -f test/docker-compose.yml up --wait
+
+.PHONY: down
+down:
+	docker compose -f test/docker-compose.yml down -v --remove-orphans
