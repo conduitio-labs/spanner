@@ -230,7 +230,7 @@ func decodeRow(row *spanner.Row) (opencdc.StructuredData, error) {
 	for i, column := range row.ColumnNames() {
 		var val interface{}
 		var err error
-		switch row.ColumnType(i).Code {
+		switch code := row.ColumnType(i).Code; code {
 		case spannerpb.TypeCode_BOOL:
 			var v bool
 			err = row.Column(i, &v)
@@ -287,8 +287,10 @@ func decodeRow(row *spanner.Row) (opencdc.StructuredData, error) {
 			var v string
 			err = row.Column(i, &v)
 			val = v
+		case spannerpb.TypeCode_TYPE_CODE_UNSPECIFIED:
+			return nil, fmt.Errorf("unsupported column type %s for %s", code.String(), column)
 		default:
-			return nil, fmt.Errorf("unsupported column type for %s", column)
+			return nil, fmt.Errorf("unsupported column type %s for %s", code.String(), column)
 		}
 		if err != nil {
 			return nil, fmt.Errorf("failed to decode column %s: %w", column, err)

@@ -35,7 +35,7 @@ var (
 )
 
 var TableKeys = common.TableKeys{
-	"singers": "SingerId",
+	"singers": "SingerID",
 }
 
 var emulatorHost = "localhost:9010"
@@ -121,10 +121,10 @@ func SetupDatabase(ctx context.Context, is *is.I) {
 		Database: databaseName,
 		Statements: []string{
 			`CREATE TABLE Singers (
-				SingerId   INT64 NOT NULL,
+				SingerID   INT64 NOT NULL,
 				Name       STRING(1024),
 				CreatedAt  TIMESTAMP DEFAULT (CURRENT_TIMESTAMP())
-			) PRIMARY KEY (SingerId DESC)`,
+			) PRIMARY KEY (SingerID DESC)`,
 		},
 	})
 	is.NoErr(err)
@@ -134,14 +134,14 @@ func SetupDatabase(ctx context.Context, is *is.I) {
 }
 
 type Singer struct {
-	SingerId  int64     `spanner:"SingerId"`
+	SingerID  int64     `spanner:"SingerID"`
 	Name      string    `spanner:"Name"`
 	CreatedAt time.Time `spanner:"CreatedAt"`
 }
 
 func (s Singer) ToStructuredData() opencdc.StructuredData {
 	return opencdc.StructuredData{
-		"SingerId":  s.SingerId,
+		"SingerID":  s.SingerID,
 		"Name":      s.Name,
 		"CreatedAt": s.CreatedAt,
 	}
@@ -149,7 +149,7 @@ func (s Singer) ToStructuredData() opencdc.StructuredData {
 
 type SingersTable struct{}
 
-func (SingersTable) Insert(ctx context.Context, is *is.I, singerId int, singerName string) Singer {
+func (SingersTable) Insert(ctx context.Context, is *is.I, singerID int, singerName string) Singer {
 	client := NewClient(ctx, is)
 	defer client.Close()
 
@@ -157,10 +157,10 @@ func (SingersTable) Insert(ctx context.Context, is *is.I, singerId int, singerNa
 
 	tx := func(ctx context.Context, txn *spanner.ReadWriteTransaction) error {
 		stmt := spanner.Statement{
-			SQL: `INSERT INTO Singers (SingerId, Name)
-				  VALUES (@singerId, @name)`,
+			SQL: `INSERT INTO Singers (SingerID, Name)
+				  VALUES (@singerID, @name)`,
 			Params: map[string]interface{}{
-				"singerId": singerId,
+				"singerID": singerID,
 				"name":     singerName,
 			},
 		}
@@ -192,9 +192,9 @@ func (SingersTable) Update(ctx context.Context, is *is.I, singer Singer) {
 		stmt := spanner.Statement{
 			SQL: `UPDATE Singers
 				SET Name = @name, CreatedAt = @createdAt
-				WHERE SingerId = @singerId`,
+				WHERE SingerID = @singerID`,
 			Params: map[string]interface{}{
-				"singerId":  singer.SingerId,
+				"singerID":  singer.SingerID,
 				"name":      singer.Name,
 				"createdAt": singer.CreatedAt,
 			},
@@ -214,9 +214,9 @@ func (SingersTable) Delete(ctx context.Context, is *is.I, singer Singer) {
 	tx := func(ctx context.Context, txn *spanner.ReadWriteTransaction) error {
 		stmt := spanner.Statement{
 			SQL: `DELETE FROM Singers
-				  WHERE SingerId = @singerId`,
+				  WHERE SingerID = @singerID`,
 			Params: map[string]interface{}{
-				"singerId": singer.SingerId,
+				"singerID": singer.SingerID,
 			},
 		}
 		_, err := txn.Update(ctx, stmt)
@@ -239,7 +239,7 @@ func ReadAndAssertSnapshot(
 
 	assertMetadata(is, rec.Metadata)
 
-	isDataEqual(is, rec.Key, opencdc.StructuredData{"SingerId": singer.SingerId})
+	isDataEqual(is, rec.Key, opencdc.StructuredData{"SingerID": singer.SingerID})
 	isDataEqual(is, rec.Payload.After, singer.ToStructuredData())
 
 	return rec
