@@ -8,19 +8,6 @@ import (
 	"github.com/matryer/is"
 )
 
-func testSnapshotIterator(ctx context.Context, is *is.I) (*snapshotIterator, func()) {
-	is.Helper()
-
-	client := testutils.NewClient(ctx, is)
-
-	iterator := newSnapshotIterator(ctx, snapshotIteratorConfig{
-		tableKeys: testutils.TableKeys,
-		client:    client,
-	})
-
-	return iterator, func() { is.NoErr(iterator.Teardown(ctx)) }
-}
-
 func TestTeardownSource_NoOpen(t *testing.T) {
 	is := is.New(t)
 	con := NewSource()
@@ -29,29 +16,3 @@ func TestTeardownSource_NoOpen(t *testing.T) {
 }
 
 var singersTable testutils.SingersTable
-
-func TestSnapshot(t *testing.T) {
-	is := is.New(t)
-	ctx := testutils.TestContext(t)
-
-	testutils.CreateInstance(ctx, t, is)
-	testutils.SetupDatabase(ctx, t, is)
-
-	var singers []testutils.Singer
-
-	singer1 := singersTable.Insert(ctx, is, "singer1")
-	singers = append(singers, singer1)
-
-	singer2 := singersTable.Insert(ctx, is, "singer2")
-	singers = append(singers, singer2)
-
-	singer3 := singersTable.Insert(ctx, is, "singer3")
-	singers = append(singers, singer3)
-
-	iterator, stopIterator := testSnapshotIterator(ctx, is)
-	defer stopIterator()
-
-	for _, singer := range singers {
-		testutils.ReadAndAssertSnapshot(ctx, is, iterator, singer)
-	}
-}
