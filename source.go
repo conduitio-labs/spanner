@@ -1,28 +1,23 @@
 package spanner
 
-//go:generate paramgen -output=paramgen_src.go SourceConfig
-
 import (
 	"context"
+	"errors"
 	"fmt"
 
+	"cloud.google.com/go/spanner"
+	"github.com/conduitio-labs/conduit-connector-spanner/common"
 	"github.com/conduitio/conduit-commons/config"
 	"github.com/conduitio/conduit-commons/opencdc"
 	sdk "github.com/conduitio/conduit-connector-sdk"
+	"google.golang.org/api/iterator"
 )
 
 type Source struct {
 	sdk.UnimplementedSource
 
-	config           SourceConfig
-	lastPositionRead opencdc.Position //nolint:unused // this is just an example
-}
-
-type SourceConfig struct {
-	// Config includes parameters that are the same in the source and destination.
-	Config
-	// SourceConfigParam is named foo and must be provided by the user.
-	SourceConfigParam string `json:"foo" validate:"required"`
+	iterator *snapshotIterator
+	config   SourceConfig
 }
 
 func NewSource() sdk.Source {
@@ -30,35 +25,102 @@ func NewSource() sdk.Source {
 }
 
 func (s *Source) Parameters() config.Parameters {
-	// Parameters is a map of named Parameters that describe how to configure
-	// the Source. Parameters can be generated from SourceConfig with paramgen.
 	return s.config.Parameters()
 }
 
 func (s *Source) Configure(ctx context.Context, cfg config.Config) error {
-	sdk.Logger(ctx).Info().Msg("Configuring Source...")
-	err := sdk.Util.ParseConfig(ctx, cfg, &s.config, NewSource().Parameters())
+	err := sdk.Util.ParseConfig(ctx, cfg, &s.config, s.config.Parameters())
 	if err != nil {
 		return fmt.Errorf("invalid config: %w", err)
 	}
+	sdk.Logger(ctx).Info().Msg("configured source")
+
 	return nil
 }
 
-func (s *Source) Open(_ context.Context, _ opencdc.Position) (err error) {
+func (s *Source) Open(ctx context.Context, _ opencdc.Position) (err error) {
+	client, err := common.NewClient(ctx, common.NewClientConfig{
+		DatabaseName: s.config.Database,
+		Endpoint:     s.config.Endpoint,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create spanner client: %w", err)
+	}
+
+	tableKeys, err := getTableKeys(ctx, client, s.config.Tables)
+	if err != nil {
+		return fmt.Errorf("failed to get table primary keys: %w", err)
+	}
+
+	s.iterator = newSnapshotIterator(ctx, snapshotIteratorConfig{
+		tableKeys: tableKeys,
+		client:    client,
+	})
+
 	return nil
 }
 
-func (s *Source) Read(_ context.Context) (rec opencdc.Record, err error) {
-	return rec, nil
+func (s *Source) Read(ctx context.Context) (rec opencdc.Record, err error) {
+	return s.iterator.Read(ctx)
 }
 
-func (s *Source) Ack(_ context.Context, _ opencdc.Position) error {
-	return nil
+func (s *Source) Ack(ctx context.Context, pos opencdc.Position) error {
+	return s.iterator.Ack(ctx, pos)
 }
 
-func (s *Source) Teardown(_ context.Context) error {
-	// Teardown signals to the plugin that there will be no more calls to any
-	// other function. After Teardown returns, the plugin should be ready for a
-	// graceful shutdown.
-	return nil
+func (s *Source) Teardown(ctx context.Context) error {
+	return s.iterator.Teardown(ctx)
+}
+
+func getPrimaryKey(
+	ctx context.Context,
+	client *spanner.Client,
+	table string,
+) (common.PrimaryKeyName, error) {
+	stmt := spanner.Statement{
+		SQL: `
+            SELECT COLUMN_NAME
+            FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+            WHERE TABLE_NAME = @table
+            AND CONSTRAINT_NAME = 'PRIMARY_KEY'
+            ORDER BY ORDINAL_POSITION LIMIT 1
+        `,
+		Params: map[string]interface{}{
+			"table": table,
+		},
+	}
+
+	iter := client.Single().Query(ctx, stmt)
+	defer iter.Stop()
+
+	row, err := iter.Next()
+	if errors.Is(err, iterator.Done) {
+		return "", fmt.Errorf("no primary key found for table %s", table)
+	}
+	if err != nil {
+		return "", fmt.Errorf("failed to get primary key from table %s: %w", table, err)
+	}
+
+	var columnName common.PrimaryKeyName
+	if err := row.Columns(&columnName); err != nil {
+		return "", fmt.Errorf("failed to scan primary key from table %s: %w", table, err)
+	}
+
+	return columnName, nil
+}
+
+func getTableKeys(
+	ctx context.Context,
+	client *spanner.Client,
+	tables []string,
+) (common.TableKeys, error) {
+	tableKeys := make(common.TableKeys)
+	for _, table := range tables {
+		primaryKey, err := getPrimaryKey(ctx, client, table)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get primary key for table %q: %w", table, err)
+		}
+		tableKeys[common.TableName(table)] = primaryKey
+	}
+	return tableKeys, nil
 }
