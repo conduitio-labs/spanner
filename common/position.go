@@ -40,15 +40,6 @@ func (p SnapshotPosition) ToSDKPosition() opencdc.Position {
 	return v
 }
 
-func (p SnapshotPosition) Clone() SnapshotPosition {
-	var newPosition SnapshotPosition
-	newPosition.Snapshots = make(map[TableName]TablePosition)
-	for k, v := range p.Snapshots {
-		newPosition.Snapshots[k] = v
-	}
-	return newPosition
-}
-
 type SnapshotPositions map[TableName]TablePosition
 
 type TablePosition struct {
