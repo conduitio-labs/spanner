@@ -94,7 +94,6 @@ func (s *Source) Teardown(ctx context.Context) error {
 
 	return nil
 }
-
 func getPrimaryKey(
 	ctx context.Context,
 	client *spanner.Client,
@@ -102,13 +101,12 @@ func getPrimaryKey(
 ) (common.PrimaryKeyName, error) {
 	stmt := spanner.Statement{
 		SQL: `
-			SELECT kcu.COLUMN_NAME
-			FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc
-			JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu 
-			ON tc.CONSTRAINT_NAME = kcu.CONSTRAINT_NAME
-			WHERE tc.TABLE_NAME = @table
-			AND tc.CONSTRAINT_TYPE = 'PRIMARY KEY'
-        `,
+			SELECT COLUMN_NAME
+			FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+			WHERE TABLE_NAME = @table
+			AND CONSTRAINT_NAME = 'PRIMARY_KEY'
+			ORDER BY ORDINAL_POSITION LIMIT 1
+		`,
 		Params: map[string]interface{}{
 			"table": table,
 		},
