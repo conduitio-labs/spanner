@@ -81,7 +81,11 @@ func (s *Source) Ack(ctx context.Context, pos opencdc.Position) error {
 }
 
 func (s *Source) Teardown(ctx context.Context) error {
-	defer s.client.Close()
+	defer func() {
+		if s.client != nil {
+			s.client.Close()
+		}
+	}()
 	if s.iterator != nil {
 		if err := s.iterator.Teardown(ctx); err != nil {
 			return fmt.Errorf("failed to teardown iterator: %w", err)
