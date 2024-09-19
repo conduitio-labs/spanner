@@ -209,5 +209,5 @@ func isDataEqual(is *is.I, a, b opencdc.Data) {
 func assertMetadata(is *is.I, metadata opencdc.Metadata) {
 	col, err := metadata.GetCollection()
 	is.NoErr(err)
-	is.Equal(col, "singers")
+	is.Equal(col, "Singers")
 }

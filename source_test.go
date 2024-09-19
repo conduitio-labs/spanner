@@ -15,6 +15,7 @@ func testSource(ctx context.Context, is *is.I) (sdk.Source, func()) {
 	is.NoErr(source.Configure(ctx, config.Config{
 		SourceConfigDatabase: testutils.DatabaseName,
 		SourceConfigEndpoint: testutils.EmulatorHost,
+		SourceConfigTables:   "Singers",
 	}))
 	is.NoErr(source.Open(ctx, nil))
 

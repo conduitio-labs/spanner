@@ -22,7 +22,13 @@ type Source struct {
 }
 
 func NewSource() sdk.Source {
-	return sdk.SourceWithMiddleware(&Source{}, sdk.DefaultSourceMiddleware()...)
+	enabled := false
+	return sdk.SourceWithMiddleware(&Source{}, sdk.DefaultSourceMiddleware(
+		sdk.SourceWithSchemaExtractionConfig{
+			PayloadEnabled: &enabled,
+			KeyEnabled:     &enabled,
+		},
+	)...)
 }
 
 func (s *Source) Parameters() config.Parameters {
@@ -92,11 +98,12 @@ func getPrimaryKey(
 ) (common.PrimaryKeyName, error) {
 	stmt := spanner.Statement{
 		SQL: `
-            SELECT COLUMN_NAME
-            FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
-            WHERE TABLE_NAME = @table
-            AND CONSTRAINT_NAME = 'PRIMARY_KEY'
-            ORDER BY ORDINAL_POSITION LIMIT 1
+			SELECT kcu.COLUMN_NAME
+			FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc
+			JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu 
+			ON tc.CONSTRAINT_NAME = kcu.CONSTRAINT_NAME
+			WHERE tc.TABLE_NAME = @table
+			AND tc.CONSTRAINT_TYPE = 'PRIMARY KEY'
         `,
 		Params: map[string]interface{}{
 			"table": table,

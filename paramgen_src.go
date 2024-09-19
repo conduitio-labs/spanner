@@ -10,6 +10,7 @@ import (
 const (
 	SourceConfigDatabase = "database"
 	SourceConfigEndpoint = "endpoint"
+	SourceConfigTables   = "tables"
 )
 
 func (SourceConfig) Parameters() map[string]config.Parameter {
@@ -27,6 +28,14 @@ func (SourceConfig) Parameters() map[string]config.Parameter {
 			Description: "Endpoint is the URL for endpoint override - testing/dry-run only",
 			Type:        config.ParameterTypeString,
 			Validations: []config.Validation{},
+		},
+		SourceConfigTables: {
+			Default:     "",
+			Description: "Tables represents the spanner tables to read from.",
+			Type:        config.ParameterTypeString,
+			Validations: []config.Validation{
+				config.ValidationRequired{},
+			},
 		},
 	}
 }
