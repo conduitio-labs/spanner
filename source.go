@@ -86,8 +86,6 @@ func (s *Source) Open(ctx context.Context, pos opencdc.Position) (err error) {
 
 	sdk.Logger(ctx).Info().Msg("opened source")
 
-	sdk.Logger(ctx).Info().Msg("opened source")
-
 	return nil
 }
 
