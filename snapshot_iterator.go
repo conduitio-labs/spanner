@@ -154,6 +154,9 @@ func (s *snapshotIterator) fetchTable(
 	sdk.Logger(ctx).Debug().Msgf("starting fetching rows from table %s", tableName)
 	defer sdk.Logger(ctx).Debug().Msgf("finished fetching rows for table %s", tableName)
 
+	sdk.Logger(ctx).Debug().Msgf("starting fetching rows from table %s", tableName)
+	defer sdk.Logger(ctx).Debug().Msgf("finished fetching rows for table %s", tableName)
+
 	for ; ; start++ {
 		row, err := iter.Next()
 		if errors.Is(err, iterator.Done) {
