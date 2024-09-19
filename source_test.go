@@ -45,6 +45,7 @@ func TestTeardownSource_NoOpen(t *testing.T) {
 	err := con.Teardown(context.Background())
 	is.NoErr(err)
 }
+
 func TestSource_SimpleSnapshot(t *testing.T) {
 	is := is.New(t)
 	ctx := testutils.TestContext(t)
