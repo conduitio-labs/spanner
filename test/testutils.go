@@ -31,20 +31,20 @@ var (
 	instanceID   = "test-instance"
 	instanceName = fmt.Sprintf("projects/%s/instances/%s", projectID, instanceID)
 	databaseID   = "test-database"
-	databaseName = fmt.Sprint("projects/", projectID, "/instances/", instanceID, "/databases/", databaseID)
+	DatabaseName = fmt.Sprint("projects/", projectID, "/instances/", instanceID, "/databases/", databaseID)
 )
 
 var TableKeys = common.TableKeys{
 	"singers": "SingerID",
 }
 
-var emulatorHost = "localhost:9010"
+var EmulatorHost = "localhost:9010"
 
 func NewClient(ctx context.Context, is *is.I) *spanner.Client {
 	is.Helper()
 
-	client, err := spanner.NewClient(ctx, databaseName,
-		option.WithEndpoint(emulatorHost),
+	client, err := spanner.NewClient(ctx, DatabaseName,
+		option.WithEndpoint(EmulatorHost),
 		option.WithGRPCDialOption(grpc.WithTransportCredentials(insecure.NewCredentials())),
 		option.WithoutAuthentication())
 	is.NoErr(err)
@@ -56,7 +56,7 @@ func newInstanceAdminClient(ctx context.Context, is *is.I) *instance.InstanceAdm
 	is.Helper()
 
 	client, err := instance.NewInstanceAdminClient(ctx,
-		option.WithEndpoint(emulatorHost),
+		option.WithEndpoint(EmulatorHost),
 		option.WithGRPCDialOption(grpc.WithTransportCredentials(insecure.NewCredentials())),
 		option.WithoutAuthentication())
 	is.NoErr(err)
@@ -91,7 +91,7 @@ func CreateInstance(ctx context.Context, is *is.I) {
 
 func NewDatabaseAdminClient(ctx context.Context, is *is.I) *database.DatabaseAdminClient {
 	databaseAdminClient, err := database.NewDatabaseAdminClient(ctx,
-		option.WithEndpoint(emulatorHost),
+		option.WithEndpoint(EmulatorHost),
 		option.WithGRPCDialOption(grpc.WithTransportCredentials(insecure.NewCredentials())),
 		option.WithoutAuthentication())
 	is.NoErr(err)
@@ -103,8 +103,9 @@ func SetupDatabase(ctx context.Context, is *is.I) {
 	client := NewDatabaseAdminClient(ctx, is)
 	defer client.Close()
 
+	// cleanup previous database setup, if any
 	err := client.DropDatabase(ctx, &databasepb.DropDatabaseRequest{
-		Database: databaseName,
+		Database: DatabaseName,
 	})
 	is.NoErr(err)
 
@@ -118,7 +119,7 @@ func SetupDatabase(ctx context.Context, is *is.I) {
 	is.NoErr(err)
 
 	opUpdate, err := client.UpdateDatabaseDdl(ctx, &databasepb.UpdateDatabaseDdlRequest{
-		Database: databaseName,
+		Database: DatabaseName,
 		Statements: []string{
 			`CREATE TABLE Singers (
 				SingerID   INT64 NOT NULL,

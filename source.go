@@ -16,6 +16,7 @@ import (
 type Source struct {
 	sdk.UnimplementedSource
 
+	client   *spanner.Client
 	iterator *snapshotIterator
 	config   SourceConfig
 }
@@ -39,23 +40,28 @@ func (s *Source) Configure(ctx context.Context, cfg config.Config) error {
 }
 
 func (s *Source) Open(ctx context.Context, _ opencdc.Position) (err error) {
-	client, err := common.NewClient(ctx, common.NewClientConfig{
+	s.client, err = common.NewClient(ctx, common.NewClientConfig{
 		DatabaseName: s.config.Database,
 		Endpoint:     s.config.Endpoint,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create spanner client: %w", err)
 	}
+	sdk.Logger(ctx).Info().Msg("created spanner client")
 
-	tableKeys, err := getTableKeys(ctx, client, s.config.Tables)
+	tableKeys, err := getTableKeys(ctx, s.client, s.config.Tables)
 	if err != nil {
 		return fmt.Errorf("failed to get table primary keys: %w", err)
 	}
 
+	sdk.Logger(ctx).Info().Msg("got primary keys from tables")
+
 	s.iterator = newSnapshotIterator(ctx, snapshotIteratorConfig{
 		tableKeys: tableKeys,
-		client:    client,
+		client:    s.client,
 	})
+
+	sdk.Logger(ctx).Info().Msg("opened source")
 
 	return nil
 }
@@ -69,7 +75,14 @@ func (s *Source) Ack(ctx context.Context, pos opencdc.Position) error {
 }
 
 func (s *Source) Teardown(ctx context.Context) error {
-	return s.iterator.Teardown(ctx)
+	defer s.client.Close()
+	if s.iterator != nil {
+		if err := s.iterator.Teardown(ctx); err != nil {
+			return fmt.Errorf("failed to teardown iterator: %w", err)
+		}
+	}
+
+	return nil
 }
 
 func getPrimaryKey(

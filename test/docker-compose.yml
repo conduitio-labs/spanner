@@ -1,6 +1,6 @@
 services:
   spanner-emulator:
-    container_name: spanner-emulator
+    container_name: spanner
     image: gcr.io/cloud-spanner-emulator/emulator
     ports:
       - "9010:9010"
