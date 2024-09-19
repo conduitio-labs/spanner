@@ -30,6 +30,7 @@ type (
 	snapshotIteratorConfig struct {
 		tableKeys common.TableKeys
 		client    *spanner.Client
+		position  *common.SnapshotPosition
 	}
 	fetchData struct {
 		payload        opencdc.StructuredData
@@ -49,15 +50,20 @@ var (
 )
 
 func newSnapshotIterator(ctx context.Context, config snapshotIteratorConfig) *snapshotIterator {
+	lastPosition := common.SnapshotPosition{
+		Snapshots: map[common.TableName]common.TablePosition{},
+	}
+	if config.position != nil {
+		lastPosition = *config.position
+	}
+
 	t, _ := tomb.WithContext(ctx)
 	iterator := &snapshotIterator{
-		t:      t,
-		acks:   csync.WaitGroup{},
-		config: config,
-		dataC:  make(chan fetchData),
-		lastPosition: common.SnapshotPosition{
-			Snapshots: map[common.TableName]common.TablePosition{},
-		},
+		t:            t,
+		acks:         csync.WaitGroup{},
+		config:       config,
+		dataC:        make(chan fetchData),
+		lastPosition: lastPosition,
 	}
 
 	for tableName, primaryKey := range config.tableKeys {
@@ -197,6 +203,8 @@ func (s *snapshotIterator) fetchStartEnd(
 	ro *spanner.ReadOnlyTransaction,
 	tableName common.TableName,
 ) (start, end int64, err error) {
+	// fetch the start
+	start = s.config.position.Snapshots[tableName].LastRead
 	query := fmt.Sprintf(`
 		SELECT MAX(%s) AS count FROM %s`,
 		s.config.tableKeys[tableName], tableName,
@@ -217,7 +225,7 @@ func (s *snapshotIterator) fetchStartEnd(
 		return 0, 0, fmt.Errorf("failed to decode start and end: %w", err)
 	}
 
-	return 0, result.Count, nil
+	return start, result.Count, nil
 }
 
 func (s *snapshotIterator) buildRecord(data fetchData) opencdc.Record {

@@ -2,6 +2,7 @@ package common
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"github.com/conduitio/conduit-commons/opencdc"
 )
@@ -22,6 +23,14 @@ const (
 type Position struct {
 	Kind             PositionType      `json:"kind"`
 	SnapshotPosition *SnapshotPosition `json:"snapshot_position,omitempty"`
+}
+
+func ParseSDKPosition(p opencdc.Position) (Position, error) {
+	var pos Position
+	if err := json.Unmarshal(p, &pos); err != nil {
+		return pos, fmt.Errorf("failed to parse position: %w", err)
+	}
+	return pos, nil
 }
 
 type SnapshotPosition struct {

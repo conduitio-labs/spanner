@@ -45,7 +45,7 @@ func (s *Source) Configure(ctx context.Context, cfg config.Config) error {
 	return nil
 }
 
-func (s *Source) Open(ctx context.Context, _ opencdc.Position) (err error) {
+func (s *Source) Open(ctx context.Context, pos opencdc.Position) (err error) {
 	s.client, err = common.NewClient(ctx, common.NewClientConfig{
 		DatabaseName: s.config.Database,
 		Endpoint:     s.config.Endpoint,
@@ -62,10 +62,27 @@ func (s *Source) Open(ctx context.Context, _ opencdc.Position) (err error) {
 
 	sdk.Logger(ctx).Info().Msg("got primary keys from tables")
 
-	s.iterator = newSnapshotIterator(ctx, snapshotIteratorConfig{
-		tableKeys: tableKeys,
-		client:    s.client,
-	})
+	if pos != nil {
+		parsed, err := common.ParseSDKPosition(pos)
+		if err != nil {
+			return err
+		}
+
+		if parsed.Kind == common.PositionTypeSnapshot {
+			s.iterator = newSnapshotIterator(ctx, snapshotIteratorConfig{
+				tableKeys: tableKeys,
+				client:    s.client,
+				position:  parsed.SnapshotPosition,
+			})
+		} else {
+			return fmt.Errorf("unsupported cdc mode")
+		}
+	} else {
+		s.iterator = newSnapshotIterator(ctx, snapshotIteratorConfig{
+			tableKeys: tableKeys,
+			client:    s.client,
+		})
+	}
 
 	sdk.Logger(ctx).Info().Msg("opened source")
 
