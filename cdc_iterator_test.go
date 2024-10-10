@@ -1,9 +1,9 @@
 package spanner
 
 import (
-	"fmt"
 	"math/rand/v2"
 	"testing"
+	"time"
 
 	testutils "github.com/conduitio-labs/conduit-connector-spanner/test"
 	"github.com/matryer/is"
@@ -26,19 +26,15 @@ func TestCDC(t *testing.T) {
 
 	defer func() { is.NoErr(iterator.Teardown(ctx)) }()
 
+	<-time.After(1 * time.Second)
+
 	var id int64
 
 	id = rand.Int64()
-	singersTable.Insert(ctx, is, int(id), fmt.Sprintf("singer 1 %v", id))
-	id = rand.Int64()
-	singersTable.Insert(ctx, is, int(id), fmt.Sprintf("singer 2 %v", id))
-	id = rand.Int64()
-	singersTable.Insert(ctx, is, int(id), fmt.Sprintf("singer 3 %v", id))
-	id = rand.Int64()
-	singersTable.Insert(ctx, is, int(id), fmt.Sprintf("singer 4 %v", id))
+	singer := singersTable.Insert(ctx, is, int(id))
+	singersTable.Delete(ctx, is, singer)
 
 	iterator.Read(ctx)
-	fmt.Println("Read")
 }
 
 func TestInsertSomeData(t *testing.T) {
@@ -47,14 +43,14 @@ func TestInsertSomeData(t *testing.T) {
 
 	{
 		id := rand.Int64()
-		singersTable.Insert(ctx, is, int(id), fmt.Sprintf("singer%v", id))
+		singersTable.Insert(ctx, is, int(id))
 	}
 	{
 		id := rand.Int64()
-		singersTable.Insert(ctx, is, int(id), fmt.Sprintf("singer%v", id))
+		singersTable.Insert(ctx, is, int(id))
 	}
 	{
 		id := rand.Int64()
-		singersTable.Insert(ctx, is, int(id), fmt.Sprintf("singer%v", id))
+		singersTable.Insert(ctx, is, int(id))
 	}
 }
