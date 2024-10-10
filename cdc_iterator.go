@@ -85,9 +85,6 @@ func (c *cdcIterator) startReader(ctx context.Context, streamID string) {
 		for _, changeRec := range result.ChangeRecords {
 			for _, dataChangeRec := range changeRec.DataChangeRecords {
 				for _, mod := range dataChangeRec.Mods {
-					// dump.P(mod)
-					// continue
-
 					if mod.OldValues.IsNull() {
 						return fmt.Errorf("old values are null")
 					} else if mod.NewValues.IsNull() {
@@ -120,11 +117,18 @@ func (c *cdcIterator) startReader(ctx context.Context, streamID string) {
 					metadata := opencdc.Metadata{}
 					metadata.SetCollection(c.config.tableName)
 
+					key := opencdc.StructuredData{}
+					if keys, ok := mod.Keys.Value.(map[string]interface{}); ok && mod.Keys.Valid {
+						for k, v := range keys {
+							key[k] = v
+						}
+					}
+
 					c.recsC <- opencdc.Record{
 						Position:  position.ToSDKPosition(),
 						Operation: operation,
 						Metadata:  metadata,
-						Key:       nil,
+						Key:       key,
 						Payload: opencdc.Change{
 							Before: opencdc.StructuredData(before),
 							After:  opencdc.StructuredData(after),
