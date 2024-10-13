@@ -91,6 +91,7 @@ func (s *snapshotIterator) Read(ctx context.Context) (opencdc.Record, error) {
 
 		return opencdc.Record{}, ErrSnapshotIteratorDone
 	case data := <-s.dataC:
+		sdk.Logger(ctx).Trace().Msg("received data from fetcher")
 		s.acks.Add(1)
 		return s.buildRecord(data), nil
 	}

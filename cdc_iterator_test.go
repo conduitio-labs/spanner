@@ -12,13 +12,16 @@ import (
 
 func testCdcIterator(ctx context.Context, is *is.I) (common.Iterator, func()) {
 	client := testutils.NewClient(ctx, is)
+	adminClient := testutils.NewDatabaseAdminClient(ctx, is)
 
 	iterator, err := newCdcIterator(ctx, &cdcIteratorConfig{
-		tableName:  "Singers",
-		projectID:  testutils.ProjectID,
-		instanceID: testutils.InstanceID,
-		databaseID: testutils.DatabaseID,
-		client:     client,
+		tableName:   "Singers",
+		projectID:   testutils.ProjectID,
+		instanceID:  testutils.InstanceID,
+		databaseID:  testutils.DatabaseID,
+		client:      client,
+		adminClient: adminClient,
+		endpoint:    testutils.EmulatorHost,
 	})
 	is.NoErr(err)
 
@@ -30,6 +33,7 @@ func testCdcIteratorAtPosition(
 	sdkPos opencdc.Position,
 ) (common.Iterator, func()) {
 	client := testutils.NewClient(ctx, is)
+	adminClient := testutils.NewDatabaseAdminClient(ctx, is)
 
 	pos, err := common.ParseSDKPosition(sdkPos)
 	is.NoErr(err)
@@ -39,12 +43,14 @@ func testCdcIteratorAtPosition(
 	is.True(pos.SnapshotPosition == nil)
 
 	iterator, err := newCdcIterator(ctx, &cdcIteratorConfig{
-		tableName:  "Singers",
-		projectID:  testutils.ProjectID,
-		instanceID: testutils.InstanceID,
-		databaseID: testutils.DatabaseID,
-		client:     client,
-		position:   pos.CDCPosition,
+		tableName:   "Singers",
+		projectID:   testutils.ProjectID,
+		instanceID:  testutils.InstanceID,
+		databaseID:  testutils.DatabaseID,
+		client:      client,
+		adminClient: adminClient,
+		position:    pos.CDCPosition,
+		endpoint:    testutils.EmulatorHost,
 	})
 	is.NoErr(err)
 

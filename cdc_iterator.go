@@ -15,12 +15,14 @@ import (
 
 type (
 	cdcIteratorConfig struct {
-		tableName  string
-		projectID  string
-		instanceID string
-		databaseID string
-		position   *common.CDCPosition
-		client     *spanner.Client
+		tableName   string
+		projectID   string
+		instanceID  string
+		databaseID  string
+		position    *common.CDCPosition
+		client      *spanner.Client
+		adminClient *database.DatabaseAdminClient
+		endpoint    string
 	}
 	cdcIterator struct {
 		reader *changestreams.Reader
@@ -33,12 +35,6 @@ type (
 var _ common.Iterator = new(cdcIterator)
 
 func newCdcIterator(ctx context.Context, config *cdcIteratorConfig) (*cdcIterator, error) {
-	adminClient, err := database.NewDatabaseAdminClient(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer adminClient.Close()
-
 	databaseName := fmt.Sprintf(
 		"projects/%s/instances/%s/databases/%s",
 		config.projectID, config.instanceID, config.databaseID,
@@ -58,19 +54,20 @@ func newCdcIterator(ctx context.Context, config *cdcIteratorConfig) (*cdcIterato
 
 	if !streamExists {
 		stmt := fmt.Sprint("CREATE CHANGE STREAM ", streamID, " FOR ", config.tableName)
-		op, err := adminClient.UpdateDatabaseDdl(ctx, &databasepb.UpdateDatabaseDdlRequest{
+		op, err := config.adminClient.UpdateDatabaseDdl(ctx, &databasepb.UpdateDatabaseDdlRequest{
 			Database:   databaseName,
 			Statements: []string{stmt},
 		})
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to create change stream %s: %w", streamID, err)
 		}
 		if err := op.Wait(ctx); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to wait for change stream %s creation: %w", streamID, err)
 		}
 	}
 
 	changestreamsConfig := changestreams.Config{
+		SpannerClientOptions: common.ClientOptions(config.endpoint),
 		SpannerClientConfig: spanner.ClientConfig{
 			SessionPoolConfig: spanner.DefaultSessionPoolConfig,
 		},
@@ -85,7 +82,7 @@ func newCdcIterator(ctx context.Context, config *cdcIteratorConfig) (*cdcIterato
 		changestreamsConfig,
 	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create reader for change stream %s: %w", streamID, err)
 	}
 
 	iterator := &cdcIterator{

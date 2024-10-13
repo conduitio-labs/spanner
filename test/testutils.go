@@ -94,13 +94,10 @@ func createInstance(ctx context.Context, is *is.I) {
 }
 
 func NewDatabaseAdminClient(ctx context.Context, is *is.I) *database.DatabaseAdminClient {
-	databaseAdminClient, err := database.NewDatabaseAdminClient(ctx,
-		option.WithEndpoint(EmulatorHost),
-		option.WithGRPCDialOption(grpc.WithTransportCredentials(insecure.NewCredentials())),
-		option.WithoutAuthentication())
+	client, err := common.NewDatabaseAdminClientWithEndpoint(ctx, EmulatorHost)
 	is.NoErr(err)
 
-	return databaseAdminClient
+	return client
 }
 
 func SetupDatabase(ctx context.Context, is *is.I) {
