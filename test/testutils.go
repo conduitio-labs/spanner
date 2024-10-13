@@ -284,12 +284,14 @@ func isDataEqual(is *is.I, a, b opencdc.Data) {
 }
 
 func assertMetadata(is *is.I, metadata opencdc.Metadata) {
+	is.Helper()
 	col, err := metadata.GetCollection()
 	is.NoErr(err)
 	is.Equal(col, "Singers")
 }
 
 func assertKey(is *is.I, rec opencdc.Record, singer Singer) {
+	is.Helper()
 	singerID := fmt.Sprint(singer.SingerID)
 	isDataEqual(is, rec.Key, opencdc.StructuredData{"SingerID": singerID})
 }

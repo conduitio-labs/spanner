@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"time"
 
 	"cloud.google.com/go/spanner"
 	database "cloud.google.com/go/spanner/admin/database/apiv1"
@@ -128,8 +129,11 @@ func (c *cdcIterator) startReader(ctx context.Context, streamID string) {
 		for _, changeRec := range result.ChangeRecords {
 			for _, dataChangeRec := range changeRec.DataChangeRecords {
 				for _, mod := range dataChangeRec.Mods {
+
+					// add a nanosecond so that the position doesn't include the record itself
+					start := dataChangeRec.CommitTimestamp.Add(time.Nanosecond)
 					position := common.CDCPosition{
-						Start:    dataChangeRec.CommitTimestamp,
+						Start:    start,
 						StreamID: streamID,
 					}
 

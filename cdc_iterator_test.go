@@ -132,13 +132,12 @@ func TestCDCIterator_RestartOnPosition(t *testing.T) {
 
 	var latestPosition opencdc.Position
 
-	{ // read and ack 2 records
-		testutils.ReadAndAssertInsert(ctx, is, iterator, user1)
-		rec := testutils.ReadAndAssertInsert(ctx, is, iterator, user2)
-		teardown()
+	// read and ack 2 records
+	testutils.ReadAndAssertInsert(ctx, is, iterator, user1)
+	rec := testutils.ReadAndAssertInsert(ctx, is, iterator, user2)
+	teardown()
 
-		latestPosition = rec.Position
-	}
+	latestPosition = rec.Position
 
 	// then, try to read from the second record
 
