@@ -11,11 +11,14 @@ import (
 )
 
 func testCdcIterator(ctx context.Context, t *testing.T, is *is.I) (common.Iterator, func()) {
+	client := testutils.NewClient(ctx, is)
+
 	iterator, err := newCdcIterator(ctx, &cdcIteratorConfig{
 		tableName:  "Singers",
 		projectID:  testutils.ProjectID,
 		instanceID: testutils.InstanceID,
 		databaseID: testutils.DatabaseID,
+		client:     client,
 	})
 	is.NoErr(err)
 
@@ -26,10 +29,12 @@ func testCdcIteratorAtPosition(
 	ctx context.Context, t *testing.T, is *is.I,
 	sdkPos opencdc.Position,
 ) (common.Iterator, func()) {
+	client := testutils.NewClient(ctx, is)
+
 	pos, err := common.ParseSDKPosition(sdkPos)
 	is.NoErr(err)
 
-	is.Equal(pos.Kind, "cdc")
+	is.Equal(pos.Kind, common.PositionType("cdc"))
 	is.True(pos.CDCPosition != nil)
 	is.True(pos.SnapshotPosition == nil)
 
@@ -38,6 +43,7 @@ func testCdcIteratorAtPosition(
 		projectID:  testutils.ProjectID,
 		instanceID: testutils.InstanceID,
 		databaseID: testutils.DatabaseID,
+		client:     client,
 		position:   pos.CDCPosition,
 	})
 	is.NoErr(err)

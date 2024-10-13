@@ -155,7 +155,7 @@ func (s Singer) ToStructuredData() opencdc.StructuredData {
 	return opencdc.StructuredData{
 		"SingerID":  s.SingerID,
 		"Name":      s.Name,
-		"CreatedAt": s.CreatedAt,
+		"CreatedAt": s.CreatedAt.Format(time.RFC3339),
 	}
 }
 
@@ -217,7 +217,7 @@ func ReadAndAssertSnapshot(
 
 	assertMetadata(is, rec.Metadata)
 
-	isDataEqual(is, rec.Key, opencdc.StructuredData{"SingerID": singer.SingerID})
+	assertKey(is, rec, singer)
 	isDataEqual(is, rec.Payload.After, singer.ToStructuredData())
 
 	return rec
@@ -236,7 +236,7 @@ func ReadAndAssertInsert(
 
 	assertMetadata(is, rec.Metadata)
 
-	isDataEqual(is, rec.Key, opencdc.StructuredData{"SingerID": singer.SingerID})
+	assertKey(is, rec, singer)
 	isDataEqual(is, rec.Payload.After, singer.ToStructuredData())
 
 	return rec
@@ -255,8 +255,8 @@ func ReadAndAssertUpdate(
 
 	assertMetadata(is, rec.Metadata)
 
-	isDataEqual(is, rec.Key, opencdc.StructuredData{"SingerID": prev.SingerID})
-	isDataEqual(is, rec.Key, opencdc.StructuredData{"SingerID": next.SingerID})
+	assertKey(is, rec, prev)
+	assertKey(is, rec, next)
 
 	isDataEqual(is, rec.Payload.Before, prev.ToStructuredData())
 	isDataEqual(is, rec.Payload.After, next.ToStructuredData())
@@ -275,8 +275,7 @@ func ReadAndAssertDelete(
 	is.Equal(rec.Operation, opencdc.OperationDelete)
 
 	assertMetadata(is, rec.Metadata)
-
-	isDataEqual(is, rec.Key, opencdc.StructuredData{"SingerID": singer.SingerID})
+	assertKey(is, rec, singer)
 }
 
 func isDataEqual(is *is.I, a, b opencdc.Data) {
@@ -288,4 +287,9 @@ func assertMetadata(is *is.I, metadata opencdc.Metadata) {
 	col, err := metadata.GetCollection()
 	is.NoErr(err)
 	is.Equal(col, "Singers")
+}
+
+func assertKey(is *is.I, rec opencdc.Record, singer Singer) {
+	singerID := fmt.Sprint(singer.SingerID)
+	isDataEqual(is, rec.Key, opencdc.StructuredData{"SingerID": singerID})
 }
