@@ -50,7 +50,6 @@ func TestSource_SimpleSnapshot(t *testing.T) {
 	is := is.New(t)
 	ctx := testutils.TestContext(t)
 
-	testutils.CreateInstance(ctx, is)
 	testutils.SetupDatabase(ctx, is)
 
 	var singers []testutils.Singer
@@ -76,7 +75,6 @@ func TestSource_RestartSnapshotAtPosition(t *testing.T) {
 	is := is.New(t)
 	ctx := testutils.TestContext(t)
 
-	testutils.CreateInstance(ctx, is)
 	testutils.SetupDatabase(ctx, is)
 
 	var singers []testutils.Singer

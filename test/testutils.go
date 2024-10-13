@@ -68,7 +68,7 @@ func newInstanceAdminClient(ctx context.Context, is *is.I) *instance.InstanceAdm
 	return client
 }
 
-func CreateInstance(ctx context.Context, is *is.I) {
+func createInstance(ctx context.Context, is *is.I) {
 	client := newInstanceAdminClient(ctx, is)
 	defer client.Close()
 
@@ -104,6 +104,8 @@ func NewDatabaseAdminClient(ctx context.Context, is *is.I) *database.DatabaseAdm
 }
 
 func SetupDatabase(ctx context.Context, is *is.I) {
+	createInstance(ctx, is)
+
 	client := NewDatabaseAdminClient(ctx, is)
 	defer client.Close()
 
@@ -142,6 +144,11 @@ type Singer struct {
 	SingerID  int64     `spanner:"SingerID"`
 	Name      string    `spanner:"Name"`
 	CreatedAt time.Time `spanner:"CreatedAt"`
+}
+
+func (s Singer) Update() Singer {
+	s.Name = fmt.Sprintf("%v-updated", s.Name)
+	return s
 }
 
 func (s Singer) ToStructuredData() opencdc.StructuredData {
@@ -214,6 +221,62 @@ func ReadAndAssertSnapshot(
 	isDataEqual(is, rec.Payload.After, singer.ToStructuredData())
 
 	return rec
+}
+
+func ReadAndAssertInsert(
+	ctx context.Context, is *is.I,
+	iterator common.Iterator, singer Singer,
+) opencdc.Record {
+	is.Helper()
+	rec, err := iterator.Read(ctx)
+	is.NoErr(err)
+	is.NoErr(iterator.Ack(ctx, rec.Position))
+
+	is.Equal(rec.Operation, opencdc.OperationCreate)
+
+	assertMetadata(is, rec.Metadata)
+
+	isDataEqual(is, rec.Key, opencdc.StructuredData{"SingerID": singer.SingerID})
+	isDataEqual(is, rec.Payload.After, singer.ToStructuredData())
+
+	return rec
+}
+
+func ReadAndAssertUpdate(
+	ctx context.Context, is *is.I,
+	iterator common.Iterator, prev, next Singer,
+) {
+	is.Helper()
+	rec, err := iterator.Read(ctx)
+	is.NoErr(err)
+	is.NoErr(iterator.Ack(ctx, rec.Position))
+
+	is.Equal(rec.Operation, opencdc.OperationUpdate)
+
+	assertMetadata(is, rec.Metadata)
+
+	isDataEqual(is, rec.Key, opencdc.StructuredData{"SingerID": prev.SingerID})
+	isDataEqual(is, rec.Key, opencdc.StructuredData{"SingerID": next.SingerID})
+
+	isDataEqual(is, rec.Payload.Before, prev.ToStructuredData())
+	isDataEqual(is, rec.Payload.After, next.ToStructuredData())
+}
+
+func ReadAndAssertDelete(
+	ctx context.Context, is *is.I,
+	iterator common.Iterator, singer Singer,
+) {
+	is.Helper()
+
+	rec, err := iterator.Read(ctx)
+	is.NoErr(err)
+	is.NoErr(iterator.Ack(ctx, rec.Position))
+
+	is.Equal(rec.Operation, opencdc.OperationDelete)
+
+	assertMetadata(is, rec.Metadata)
+
+	isDataEqual(is, rec.Key, opencdc.StructuredData{"SingerID": singer.SingerID})
 }
 
 func isDataEqual(is *is.I, a, b opencdc.Data) {

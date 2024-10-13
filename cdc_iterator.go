@@ -19,6 +19,7 @@ type (
 		projectID  string
 		instanceID string
 		databaseID string
+		position   *common.CDCPosition
 	}
 	cdcIterator struct {
 		reader *changestreams.Reader
@@ -31,7 +32,6 @@ type (
 var _ common.Iterator = new(cdcIterator)
 
 func newCdcIterator(ctx context.Context, config *cdcIteratorConfig) (*cdcIterator, error) {
-	// create the stream
 	adminClient, err := database.NewDatabaseAdminClient(ctx)
 	if err != nil {
 		return nil, err
@@ -42,7 +42,14 @@ func newCdcIterator(ctx context.Context, config *cdcIteratorConfig) (*cdcIterato
 		"projects/%s/instances/%s/databases/%s",
 		config.projectID, config.instanceID, config.databaseID,
 	)
-	streamID := fmt.Sprintf("%sChangeStream", config.tableName)
+
+	var streamID string
+	if config.position != nil {
+		streamID = config.position.StreamID
+	} else {
+		streamID = fmt.Sprintf("%sChangeStream", config.tableName)
+	}
+
 	stmt := fmt.Sprint("CREATE CHANGE STREAM ", streamID, " FOR ", config.tableName)
 	op, err := adminClient.UpdateDatabaseDdl(ctx, &databasepb.UpdateDatabaseDdlRequest{
 		Database:   databaseName,
@@ -55,14 +62,19 @@ func newCdcIterator(ctx context.Context, config *cdcIteratorConfig) (*cdcIterato
 		return nil, err
 	}
 
+	changestreamsConfig := changestreams.Config{
+		SpannerClientConfig: spanner.ClientConfig{
+			SessionPoolConfig: spanner.DefaultSessionPoolConfig,
+		},
+	}
+	if config.position != nil {
+		changestreamsConfig.StartTimestamp = config.position.Start
+	}
+
 	reader, err := changestreams.NewReaderWithConfig(ctx,
 		config.projectID, config.instanceID,
 		config.databaseID, streamID,
-		changestreams.Config{
-			SpannerClientConfig: spanner.ClientConfig{
-				SessionPoolConfig: spanner.DefaultSessionPoolConfig,
-			},
-		},
+		changestreamsConfig,
 	)
 	if err != nil {
 		return nil, err
@@ -118,9 +130,11 @@ func (c *cdcIterator) startReader(ctx context.Context, streamID string) {
 					metadata.SetCollection(c.config.tableName)
 
 					key := opencdc.StructuredData{}
-					if keys, ok := mod.Keys.Value.(map[string]interface{}); ok && mod.Keys.Valid {
-						for k, v := range keys {
-							key[k] = v
+					if mod.Keys.Valid {
+						if keys, ok := mod.Keys.Value.(map[string]interface{}); ok {
+							for k, v := range keys {
+								key[k] = v
+							}
 						}
 					}
 
