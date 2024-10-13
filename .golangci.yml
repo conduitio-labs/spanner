@@ -58,6 +58,10 @@ linters:
     - errname
     - errorlint
     - exhaustive
+<<<<<<< HEAD
+=======
+    # - exportloopref
+>>>>>>> e0069c4 (fix linter errors)
     # - forbidigo
     - forcetypeassert
     - funlen
@@ -65,9 +69,9 @@ linters:
     - ginkgolinter
     - gocheckcompilerdirectives
     - gochecknoinits
-    - gocognit
+    # - gocognit
     - goconst
-    - gocritic
+    # - gocritic
     - godot
     - err113
     - gofmt

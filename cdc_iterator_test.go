@@ -10,7 +10,7 @@ import (
 	"github.com/matryer/is"
 )
 
-func testCdcIterator(ctx context.Context, t *testing.T, is *is.I) (common.Iterator, func()) {
+func testCdcIterator(ctx context.Context, is *is.I) (common.Iterator, func()) {
 	client := testutils.NewClient(ctx, is)
 
 	iterator, err := newCdcIterator(ctx, &cdcIteratorConfig{
@@ -26,7 +26,7 @@ func testCdcIterator(ctx context.Context, t *testing.T, is *is.I) (common.Iterat
 }
 
 func testCdcIteratorAtPosition(
-	ctx context.Context, t *testing.T, is *is.I,
+	ctx context.Context, is *is.I,
 	sdkPos opencdc.Position,
 ) (common.Iterator, func()) {
 	client := testutils.NewClient(ctx, is)
@@ -57,7 +57,7 @@ func TestCDCIterator_InsertAction(t *testing.T) {
 
 	testutils.SetupDatabase(ctx, is)
 
-	iterator, teardown := testCdcIterator(ctx, t, is)
+	iterator, teardown := testCdcIterator(ctx, is)
 	defer teardown()
 
 	user1 := singersTable.Insert(ctx, is, 1)
@@ -79,7 +79,7 @@ func TestCDCIterator_DeleteAction(t *testing.T) {
 	user2 := singersTable.Insert(ctx, is, 2)
 	user3 := singersTable.Insert(ctx, is, 3)
 
-	iterator, teardown := testCdcIterator(ctx, t, is)
+	iterator, teardown := testCdcIterator(ctx, is)
 	defer teardown()
 
 	singersTable.Delete(ctx, is, user1)
@@ -101,7 +101,7 @@ func TestCDCIterator_UpdateAction(t *testing.T) {
 	user2 := singersTable.Insert(ctx, is, 2)
 	user3 := singersTable.Insert(ctx, is, 3)
 
-	iterator, teardown := testCdcIterator(ctx, t, is)
+	iterator, teardown := testCdcIterator(ctx, is)
 	defer teardown()
 
 	user1Updated := singersTable.Update(ctx, is, user1.Update())
@@ -121,7 +121,7 @@ func TestCDCIterator_RestartOnPosition(t *testing.T) {
 
 	// start the iterator at the beginning
 
-	iterator, teardown := testCdcIterator(ctx, t, is)
+	iterator, teardown := testCdcIterator(ctx, is)
 
 	// and trigger some insert actions
 
@@ -141,7 +141,7 @@ func TestCDCIterator_RestartOnPosition(t *testing.T) {
 
 	// then, try to read from the second record
 
-	iterator, teardown = testCdcIteratorAtPosition(ctx, t, is, latestPosition)
+	iterator, teardown = testCdcIteratorAtPosition(ctx, is, latestPosition)
 	defer teardown()
 
 	user5 := singersTable.Insert(ctx, is, 5)

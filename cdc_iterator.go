@@ -129,7 +129,6 @@ func (c *cdcIterator) startReader(ctx context.Context, streamID string) {
 		for _, changeRec := range result.ChangeRecords {
 			for _, dataChangeRec := range changeRec.DataChangeRecords {
 				for _, mod := range dataChangeRec.Mods {
-
 					// add a nanosecond so that the position doesn't include the record itself
 					start := dataChangeRec.CommitTimestamp.Add(time.Nanosecond)
 					position := common.CDCPosition{
@@ -137,10 +136,10 @@ func (c *cdcIterator) startReader(ctx context.Context, streamID string) {
 						StreamID: streamID,
 					}
 
-					operation := opencdc.OperationUpdate
-
 					before := parseValues(mod.OldValues, mod.Keys)
 					after := parseValues(mod.NewValues, mod.Keys)
+
+					var operation opencdc.Operation
 
 					if len(before) == 0 && len(after) > 0 {
 						operation = opencdc.OperationCreate
@@ -231,7 +230,6 @@ func parseValues(values spanner.NullJSON, keys spanner.NullJSON) opencdc.Structu
 
 func formatValue(val any) any {
 	switch v := val.(type) {
-
 	case string:
 		i, err := strconv.ParseInt(v, 10, 64)
 		if err != nil {
