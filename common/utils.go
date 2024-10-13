@@ -2,6 +2,8 @@ package common
 
 import (
 	"context"
+	"strconv"
+	"time"
 
 	"cloud.google.com/go/spanner"
 	sdk "github.com/conduitio/conduit-connector-sdk"
@@ -26,4 +28,22 @@ func NewClient(ctx context.Context, config NewClientConfig) (*spanner.Client, er
 	}
 
 	return spanner.NewClient(ctx, config.DatabaseName, options...)
+}
+
+func FormatValue(val any) any {
+	switch v := val.(type) {
+	case *time.Time:
+		return v.Format(time.RFC3339)
+	case time.Time:
+		return v.Format(time.RFC3339)
+	case string:
+		i, err := strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			return v
+		}
+
+		return i
+	default:
+		return v
+	}
 }

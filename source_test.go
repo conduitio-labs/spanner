@@ -25,7 +25,10 @@ func testSource(ctx context.Context, is *is.I) (sdk.Source, func()) {
 	}
 }
 
-func testSourceAtPosition(ctx context.Context, is *is.I, pos opencdc.Position) (sdk.Source, func()) {
+func testSourceAtPosition(
+	ctx context.Context, is *is.I,
+	pos opencdc.Position,
+) (sdk.Source, func()) {
 	source := NewSource()
 	is.NoErr(source.Configure(ctx, config.Config{
 		SourceConfigDatabase: testutils.DatabaseName,

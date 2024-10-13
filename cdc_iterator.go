@@ -3,7 +3,6 @@ package spanner
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"time"
 
 	"cloud.google.com/go/spanner"
@@ -158,7 +157,7 @@ func (c *cdcIterator) startReader(ctx context.Context, streamID string) {
 					if mod.Keys.Valid {
 						if keys, ok := mod.Keys.Value.(map[string]interface{}); ok {
 							for k, v := range keys {
-								key[k] = v
+								key[k] = common.FormatValue(v)
 							}
 						}
 					}
@@ -213,31 +212,17 @@ func parseValues(values spanner.NullJSON, keys spanner.NullJSON) opencdc.Structu
 
 	data := make(opencdc.StructuredData)
 	for key, val := range valuesMap {
-		data[key] = formatValue(val)
+		data[key] = common.FormatValue(val)
 	}
 
 	if keys.Valid {
 		keysMap, ok := keys.Value.(map[string]any)
 		if ok {
 			for key, val := range keysMap {
-				data[key] = formatValue(val)
+				data[key] = common.FormatValue(val)
 			}
 		}
 	}
 
 	return data
-}
-
-func formatValue(val any) any {
-	switch v := val.(type) {
-	case string:
-		i, err := strconv.ParseInt(v, 10, 64)
-		if err != nil {
-			return v
-		}
-
-		return i
-	default:
-		return v
-	}
 }

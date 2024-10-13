@@ -108,9 +108,13 @@ func (s *snapshotIterator) Teardown(ctx context.Context) error {
 			"cannot teardown snapshot mode, fetchers exited unexpectedly: %w", err)
 	}
 
+	sdk.Logger(ctx).Info().Msg("killed all workers, waiting for acks")
+
 	if err := s.acks.Wait(ctx); err != nil {
 		return fmt.Errorf("failed to wait for snapshot acks: %w", err)
 	}
+
+	sdk.Logger(ctx).Info().Msg("all acks received")
 
 	// waiting for the workers to finish will allow us to have an easier time
 	// debugging goroutine leaks.
@@ -197,6 +201,8 @@ func (s *snapshotIterator) fetchTable(
 				SnapshotEnd: end,
 			},
 		}
+
+		sdk.Logger(ctx).Trace().Msgf("sending row %v", decodedRow)
 
 		select {
 		case s.dataC <- data:
@@ -289,12 +295,12 @@ func (s *snapshotIterator) buildRecord(data fetchData) opencdc.Record {
 		string(data.primaryKeyName): data.payload[string(data.primaryKeyName)],
 	}
 
-	return sdk.Util.Source.NewRecordSnapshot(
-		position,
-		metadata,
-		key,
-		data.payload,
-	)
+	payload := opencdc.StructuredData{}
+	for key, val := range data.payload {
+		payload[key] = common.FormatValue(val)
+	}
+
+	return sdk.Util.Source.NewRecordSnapshot(position, metadata, key, payload)
 }
 
 func handleSpannerTypeCode[T any](
