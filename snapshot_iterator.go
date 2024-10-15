@@ -129,7 +129,7 @@ func snapshotQueryIterator(
 	query := fmt.Sprint(`
 		SELECT *
 		FROM `, tableName, `
-		WHERE `, primaryKey, ` > @start AND `, primaryKey, ` <= @end
+		WHERE `, primaryKey, ` >= @start AND `, primaryKey, ` <= @end
 		ORDER BY `, primaryKey)
 	stmt := spanner.Statement{
 		SQL: query,
@@ -212,29 +212,67 @@ func (s *snapshotIterator) fetchStartEnd(
 	ro *spanner.ReadOnlyTransaction,
 	tableName common.TableName,
 ) (start, end int64, err error) {
-	// fetch the start
-	start = s.config.position.Snapshots[tableName].LastRead
-	query := fmt.Sprintf(`
-		SELECT MAX(%s) AS count FROM %s`,
-		s.config.tableKeys[tableName], tableName,
-	)
-	iter := ro.Query(ctx, spanner.Statement{SQL: query})
-	defer iter.Stop()
+	{ // fetch the start
+		query := fmt.Sprintf(
+			"SELECT MIN(%s) as min_value FROM %s",
+			s.config.tableKeys[tableName], tableName,
+		)
+		stmt := spanner.Statement{
+			SQL:    query,
+			Params: nil,
+		}
+		iter := ro.Query(ctx, stmt)
+		defer iter.Stop()
 
-	var result struct {
-		Count int64 `spanner:"count"`
+		var result struct {
+			MinValue int64 `spanner:"min_value"`
+		}
+
+		row, err := iter.Next()
+		if err != nil {
+			return start, end, err
+		}
+
+		if err := row.ToStruct(&result); err != nil {
+			return start, end, err
+		}
+
+		minVal := result.MinValue
+
+		lastRead := s.lastPosition.Snapshots[tableName].LastRead
+		if lastRead > minVal {
+			// last read takes preference, as previous records where already fetched
+			start = lastRead
+		} else {
+			start = minVal
+		}
+	}
+	{ // fetch the end
+		query := fmt.Sprintf(`
+			SELECT MAX(%s) AS count FROM %s`,
+			s.config.tableKeys[tableName], tableName,
+		)
+		stmt := spanner.Statement{SQL: query}
+		iter := ro.Query(ctx, stmt)
+		defer iter.Stop()
+
+		var result struct {
+			Count int64 `spanner:"count"`
+		}
+
+		row, err := iter.Next()
+		if err != nil {
+			return start, end, err
+		}
+
+		if err := row.ToStruct(&result); err != nil {
+			return start, end, err
+		}
+
+		end = result.Count
 	}
 
-	row, err := iter.Next()
-	if err != nil {
-		return 0, 0, fmt.Errorf("failed to fetch start and end: %w", err)
-	}
-
-	if err := row.ToStruct(&result); err != nil {
-		return 0, 0, fmt.Errorf("failed to decode start and end: %w", err)
-	}
-
-	return start, result.Count, nil
+	return start, end, nil
 }
 
 func (s *snapshotIterator) buildRecord(data fetchData) opencdc.Record {
