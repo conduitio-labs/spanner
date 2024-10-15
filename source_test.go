@@ -30,6 +30,7 @@ func testSourceAtPosition(ctx context.Context, is *is.I, pos opencdc.Position) (
 	is.NoErr(source.Configure(ctx, config.Config{
 		SourceConfigDatabase: testutils.DatabaseName,
 		SourceConfigEndpoint: testutils.EmulatorHost,
+		SourceConfigTables:   "Singers",
 	}))
 	is.NoErr(source.Open(ctx, pos))
 
