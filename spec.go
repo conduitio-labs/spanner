@@ -11,12 +11,10 @@ var version = "(devel)"
 // Specification returns the connector's specification.
 func Specification() sdk.Specification {
 	return sdk.Specification{
-		Name:              "spanner",
-		Summary:           "A Conduit Connector for Spanner",
-		Description:       "A source and destination connector for Spanner",
-		Version:           version,
-		Author:            "Meroxa, Inc.",
-		SourceParams:      new(SourceConfig).Parameters(),
-		DestinationParams: new(DestinationConfig).Parameters(),
+		Name:        "spanner",
+		Summary:     "A Conduit Connector for Spanner",
+		Description: "A source and destination connector for Spanner",
+		Version:     version,
+		Author:      "Meroxa, Inc.",
 	}
 }
