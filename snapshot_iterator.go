@@ -65,21 +65,20 @@ func newSnapshotIterator(ctx context.Context, config snapshotIteratorConfig) *sn
 	return iterator
 }
 
-func (s *snapshotIterator) Read(ctx context.Context) (rec opencdc.Record, err error) {
+func (s *snapshotIterator) Read(ctx context.Context) (opencdc.Record, error) {
 	select {
 	case <-ctx.Done():
-		//nolint:wrapcheck // no need to wrap canceled error
-		return rec, ctx.Err()
+		return opencdc.Record{}, ctx.Err()
 	case <-s.t.Dead():
 		if err := s.t.Err(); err != nil && !errors.Is(err, ErrSnapshotIteratorDone) {
-			return rec, fmt.Errorf(
+			return opencdc.Record{}, fmt.Errorf(
 				"cannot stop snapshot mode, fetchers exited unexpectedly: %w", err)
 		}
 		if err := s.acks.Wait(ctx); err != nil {
-			return rec, fmt.Errorf("failed to wait for acks on snapshot iterator done: %w", err)
+			return opencdc.Record{}, fmt.Errorf("failed to wait for acks on snapshot iterator done: %w", err)
 		}
 
-		return rec, ErrSnapshotIteratorDone
+		return opencdc.Record{}, ErrSnapshotIteratorDone
 	case data := <-s.dataC:
 		s.acks.Add(1)
 		return s.buildRecord(data), nil
