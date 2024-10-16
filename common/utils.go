@@ -29,10 +29,6 @@ func NewClient(ctx context.Context, config NewClientConfig) (*spanner.Client, er
 	return spanner.NewClient(ctx, config.DatabaseName, options...)
 }
 
-func NewDatabaseAdminClient(ctx context.Context) (*database.DatabaseAdminClient, error) {
-	return NewDatabaseAdminClientWithEndpoint(ctx, "")
-}
-
 func NewDatabaseAdminClientWithEndpoint(
 	ctx context.Context, endpoint string,
 ) (*database.DatabaseAdminClient, error) {
