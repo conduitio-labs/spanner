@@ -115,10 +115,10 @@ func (s *snapshotIterator) fetchTable(
 	tableName common.TableName,
 	primaryKey common.PrimaryKeyName,
 ) error {
-	ro := s.config.client.ReadOnlyTransaction()
-	defer ro.Close()
+	tx := s.config.client.ReadOnlyTransaction()
+	defer tx.Close()
 
-	start, end, err := s.fetchStartEnd(ctx, ro, tableName)
+	start, end, err := s.fetchStartEnd(ctx, tx, tableName)
 	if err != nil {
 		return fmt.Errorf("failed to fetch start and end of snapshot: %w", err)
 	}
@@ -135,7 +135,7 @@ func (s *snapshotIterator) fetchTable(
 			"end":   end,
 		},
 	}
-	iter := ro.Query(ctx, stmt)
+	iter := tx.Query(ctx, stmt)
 	defer iter.Stop()
 
 	for ; ; start++ {
