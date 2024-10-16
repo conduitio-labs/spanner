@@ -178,15 +178,11 @@ func (s *snapshotIterator) fetchStartEnd(
 	ro *spanner.ReadOnlyTransaction,
 	tableName common.TableName,
 ) (start, end int64, err error) {
-	query := fmt.Sprint(`
-		SELECT count(*) as count
-		FROM `, tableName,
+	query := fmt.Sprintf(`
+		SELECT MAX(%s) AS count FROM %s`,
+		s.config.tableKeys[tableName], tableName,
 	)
-	stmt := spanner.Statement{
-		SQL:    query,
-		Params: nil,
-	}
-	iter := ro.Query(ctx, stmt)
+	iter := ro.Query(ctx, spanner.Statement{SQL: query})
 	defer iter.Stop()
 
 	var result struct {
@@ -195,11 +191,11 @@ func (s *snapshotIterator) fetchStartEnd(
 
 	row, err := iter.Next()
 	if err != nil {
-		return start, end, err
+		return 0, 0, err
 	}
 
 	if err := row.ToStruct(&result); err != nil {
-		return start, end, err
+		return 0, 0, err
 	}
 
 	return 0, result.Count, nil
