@@ -26,7 +26,7 @@ type SourceConfig struct {
 }
 
 func NewSource() sdk.Source {
-	return sdk.SourceWithMiddleware(new(Source), sdk.DefaultSourceMiddleware()...)
+	return sdk.SourceWithMiddleware(&Source{}, sdk.DefaultSourceMiddleware()...)
 }
 
 func (s *Source) Parameters() config.Parameters {
