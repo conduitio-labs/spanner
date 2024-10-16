@@ -1,6 +1,6 @@
 # Conduit Connector for MySQL
 
-[Conduit](https://conduit.io) connector for google Spanner.
+[Conduit](https://conduit.io) connector for Google Spanner.
 
 ## How to build?
 
