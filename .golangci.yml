@@ -58,10 +58,8 @@ linters:
     - errname
     - errorlint
     - exhaustive
-<<<<<<< HEAD
-=======
     # - exportloopref
->>>>>>> e0069c4 (fix linter errors)
+    - copyloopvar
     # - forbidigo
     - forcetypeassert
     - funlen
