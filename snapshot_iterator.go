@@ -238,8 +238,11 @@ func handleSpannerTypeCode[T any](
 	index int,
 ) (any, error) {
 	var val T
-	err := row.Column(index, &val)
-	return val, fmt.Errorf("failed to decode value: %w", err)
+	if err := row.Column(index, &val); err != nil {
+		return nil, fmt.Errorf("failed to decode value: %w", err)
+	}
+
+	return val, nil
 }
 
 func decodeRow(ctx context.Context, row *spanner.Row) (opencdc.StructuredData, error) {
