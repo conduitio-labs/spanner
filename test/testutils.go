@@ -163,7 +163,7 @@ func InsertSinger(ctx context.Context, is *is.I, singerID int, singerName string
 			},
 		}
 		if _, err := txn.Update(ctx, stmt); err != nil {
-			return err
+			return fmt.Errorf("failed to insert singer: %w", err)
 		}
 
 		return txn.Query(ctx, spanner.Statement{

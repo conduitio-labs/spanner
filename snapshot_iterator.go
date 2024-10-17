@@ -42,7 +42,11 @@ type (
 
 var _ common.Iterator = new(snapshotIterator)
 
-var ErrSnapshotIteratorDone = errors.New("snapshot complete")
+var (
+	ErrSnapshotIteratorDone  = errors.New("snapshot complete")
+	ErrPrimaryKeyNotFound    = errors.New("primary key not found")
+	ErrUnsupportedColumnType = errors.New("unsupported column type")
+)
 
 func newSnapshotIterator(ctx context.Context, config snapshotIteratorConfig) *snapshotIterator {
 	t, _ := tomb.WithContext(ctx)
@@ -110,19 +114,11 @@ func (s *snapshotIterator) Teardown(ctx context.Context) error {
 	return nil
 }
 
-func (s *snapshotIterator) fetchTable(
-	ctx context.Context,
-	tableName common.TableName,
-	primaryKey common.PrimaryKeyName,
-) error {
-	tx := s.config.client.ReadOnlyTransaction()
-	defer tx.Close()
-
-	start, end, err := s.fetchStartEnd(ctx, tx, tableName)
-	if err != nil {
-		return fmt.Errorf("failed to fetch start and end of snapshot: %w", err)
-	}
-
+func snapshotQueryIterator(
+	ctx context.Context, tx *spanner.ReadOnlyTransaction,
+	tableName common.TableName, primaryKey common.PrimaryKeyName,
+	start, end int64,
+) (*spanner.RowIterator, func()) {
 	query := fmt.Sprint(`
 		SELECT *
 		FROM `, tableName, `
@@ -136,25 +132,42 @@ func (s *snapshotIterator) fetchTable(
 		},
 	}
 	iter := tx.Query(ctx, stmt)
-	defer iter.Stop()
+	return iter, iter.Stop
+}
+
+func (s *snapshotIterator) fetchTable(
+	ctx context.Context,
+	tableName common.TableName,
+	primaryKey common.PrimaryKeyName,
+) error {
+	tx := s.config.client.ReadOnlyTransaction()
+	defer tx.Close()
+
+	start, end, err := s.fetchStartEnd(ctx, tx, tableName)
+	if err != nil {
+		return fmt.Errorf("failed to fetch start and end of snapshot: %w", err)
+	}
+
+	iter, stopIter := snapshotQueryIterator(ctx, tx, tableName, primaryKey, start, end)
+	defer stopIter()
 
 	for ; ; start++ {
 		row, err := iter.Next()
 		if errors.Is(err, iterator.Done) {
 			break
-		}
-		if err != nil {
+		} else if err != nil {
 			return fmt.Errorf("failed to fetch next row: %w", err)
 		}
 
-		data, err := decodeRow(row)
+		data, err := decodeRow(ctx, row)
 		if err != nil {
 			return fmt.Errorf("failed to decode row: %w", err)
 		}
 
 		primaryKeyVal, ok := data[string(primaryKey)]
 		if !ok {
-			return fmt.Errorf("primary key %s not found in row %v", primaryKey, data)
+			sdk.Logger(ctx).Warn().Msgf("primary key %s not found in row %v", primaryKey, data)
+			return ErrPrimaryKeyNotFound
 		}
 
 		s.dataC <- fetchData{
@@ -191,11 +204,11 @@ func (s *snapshotIterator) fetchStartEnd(
 
 	row, err := iter.Next()
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, fmt.Errorf("failed to fetch start and end: %w", err)
 	}
 
 	if err := row.ToStruct(&result); err != nil {
-		return 0, 0, err
+		return 0, 0, fmt.Errorf("failed to decode start and end: %w", err)
 	}
 
 	return 0, result.Count, nil
@@ -220,72 +233,54 @@ func (s *snapshotIterator) buildRecord(data fetchData) opencdc.Record {
 	)
 }
 
-func decodeRow(row *spanner.Row) (opencdc.StructuredData, error) {
+func handleSpannerTypeCode[T any](
+	row *spanner.Row,
+	index int,
+) (any, error) {
+	var val T
+	err := row.Column(index, &val)
+	return val, fmt.Errorf("failed to decode value: %w", err)
+}
+
+func decodeRow(ctx context.Context, row *spanner.Row) (opencdc.StructuredData, error) {
 	data := make(opencdc.StructuredData)
 	for i, column := range row.ColumnNames() {
-		var val interface{}
+		var val any
 		var err error
 		switch code := row.ColumnType(i).Code; code {
 		case spannerpb.TypeCode_BOOL:
-			var v bool
-			err = row.Column(i, &v)
-			val = v
+			val, err = handleSpannerTypeCode[bool](row, i)
 		case spannerpb.TypeCode_INT64:
-			var v int64
-			err = row.Column(i, &v)
-			val = v
-		case spannerpb.TypeCode_FLOAT64:
-			var v float64
-			err = row.Column(i, &v)
-			val = v
+			val, err = handleSpannerTypeCode[int64](row, i)
 		case spannerpb.TypeCode_FLOAT32:
-			var v float32
-			err = row.Column(i, &v)
-			val = v
+			val, err = handleSpannerTypeCode[float32](row, i)
+		case spannerpb.TypeCode_FLOAT64:
+			val, err = handleSpannerTypeCode[float64](row, i)
 		case spannerpb.TypeCode_TIMESTAMP:
-			var v time.Time
-			err = row.Column(i, &v)
-			val = v
+			val, err = handleSpannerTypeCode[time.Time](row, i)
 		case spannerpb.TypeCode_DATE:
-			var v civil.Date
-			err = row.Column(i, &v)
-			val = v
-		case spannerpb.TypeCode_STRING:
-			var v string
-			err = row.Column(i, &v)
-			val = v
-		case spannerpb.TypeCode_BYTES:
-			var v []byte
-			err = row.Column(i, &v)
-			val = v
+			val, err = handleSpannerTypeCode[civil.Date](row, i)
+		case spannerpb.TypeCode_STRING, spannerpb.TypeCode_ENUM:
+			val, err = handleSpannerTypeCode[string](row, i)
+		case spannerpb.TypeCode_BYTES, spannerpb.TypeCode_PROTO:
+			val, err = handleSpannerTypeCode[[]byte](row, i)
 		case spannerpb.TypeCode_ARRAY:
-			var v interface{}
-			err = row.Column(i, &v)
-			val = v
+			val, err = handleSpannerTypeCode[any](row, i)
 		case spannerpb.TypeCode_STRUCT:
-			var v []spanner.GenericColumnValue
-			err = row.Column(i, &v)
-			val = v
+			val, err = handleSpannerTypeCode[[]spanner.GenericColumnValue](row, i)
 		case spannerpb.TypeCode_NUMERIC:
-			var v *big.Rat
-			err = row.Column(i, &v)
-			val = v
+			val, err = handleSpannerTypeCode[*big.Rat](row, i)
 		case spannerpb.TypeCode_JSON:
-			var v json.RawMessage
-			err = row.Column(i, &v)
-			val = v
-		case spannerpb.TypeCode_PROTO:
-			var v []byte
-			err = row.Column(i, &v)
-			val = v
-		case spannerpb.TypeCode_ENUM:
-			var v string
-			err = row.Column(i, &v)
-			val = v
+			val, err = handleSpannerTypeCode[json.RawMessage](row, i)
 		case spannerpb.TypeCode_TYPE_CODE_UNSPECIFIED:
-			return nil, fmt.Errorf("unsupported column type %s for %s", code.String(), column)
+			val, err = handleSpannerTypeCode[any](row, i)
+			sdk.Logger(ctx).Warn().Msgf(
+				"column %s has unspecified type %v for value %v",
+				column, code, val,
+			)
 		default:
-			return nil, fmt.Errorf("unsupported column type %s for %s", code.String(), column)
+			sdk.Logger(ctx).Warn().Msgf("unidentified type %v for column %v", code, column)
+			return nil, ErrUnsupportedColumnType
 		}
 		if err != nil {
 			return nil, fmt.Errorf("failed to decode column %s: %w", column, err)

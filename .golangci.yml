@@ -46,6 +46,7 @@ linters:
     - bodyclose
     - containedctx
     - contextcheck
+    - copyloopvar
     - decorder
     # - depguard
     - dogsled
@@ -57,10 +58,9 @@ linters:
     - errname
     - errorlint
     - exhaustive
-    - exportloopref
     # - forbidigo
     - forcetypeassert
-    # - funlen
+    - funlen
     - gci
     - ginkgolinter
     - gocheckcompilerdirectives
@@ -69,7 +69,7 @@ linters:
     - goconst
     - gocritic
     - godot
-    # - err113
+    - err113
     - gofmt
     - gofumpt
     - goheader
@@ -109,12 +109,12 @@ linters:
     - stylecheck
     - tenv
     - testableexamples
-    # - thelper
+    - thelper
     - unconvert
     - unparam
     - unused
     - usestdlibvars
     - wastedassign
     - whitespace
-    # - wrapcheck
+    - wrapcheck
     - zerologlint
