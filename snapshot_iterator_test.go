@@ -30,13 +30,13 @@ func TestSnapshot(t *testing.T) {
 
 	var singers []testutils.Singer
 
-	singer1 := singersTable.Insert(ctx, is, 1, "singer1")
+	singer1 := testutils.InsertSinger(ctx, is, 1, "singer1")
 	singers = append(singers, singer1)
 
-	singer2 := singersTable.Insert(ctx, is, 2, "singer2")
+	singer2 := testutils.InsertSinger(ctx, is, 2, "singer2")
 	singers = append(singers, singer2)
 
-	singer3 := singersTable.Insert(ctx, is, 3, "singer3")
+	singer3 := testutils.InsertSinger(ctx, is, 3, "singer3")
 	singers = append(singers, singer3)
 
 	iterator, stopIterator := testSnapshotIterator(ctx, is)

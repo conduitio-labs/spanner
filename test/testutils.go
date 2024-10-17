@@ -147,9 +147,7 @@ func (s Singer) ToStructuredData() opencdc.StructuredData {
 	}
 }
 
-type SingersTable struct{}
-
-func (SingersTable) Insert(ctx context.Context, is *is.I, singerID int, singerName string) Singer {
+func InsertSinger(ctx context.Context, is *is.I, singerID int, singerName string) Singer {
 	client := NewClient(ctx, is)
 	defer client.Close()
 

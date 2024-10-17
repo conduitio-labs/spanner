@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	testutils "github.com/conduitio-labs/conduit-connector-spanner/test"
 	"github.com/matryer/is"
 )
 
@@ -14,5 +13,3 @@ func TestTeardownSource_NoOpen(t *testing.T) {
 	err := con.Teardown(context.Background())
 	is.NoErr(err)
 }
-
-var singersTable testutils.SingersTable
