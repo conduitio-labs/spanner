@@ -52,7 +52,7 @@ func NewClient(ctx context.Context, is *is.I) *spanner.Client {
 	return client
 }
 
-func NewInstanceAdminClient(ctx context.Context, is *is.I) *instance.InstanceAdminClient {
+func newInstanceAdminClient(ctx context.Context, is *is.I) *instance.InstanceAdminClient {
 	is.Helper()
 
 	client, err := instance.NewInstanceAdminClient(ctx,
@@ -65,7 +65,7 @@ func NewInstanceAdminClient(ctx context.Context, is *is.I) *instance.InstanceAdm
 }
 
 func CreateInstance(ctx context.Context, is *is.I) {
-	client := NewInstanceAdminClient(ctx, is)
+	client := newInstanceAdminClient(ctx, is)
 	defer client.Close()
 
 	err := client.DeleteInstance(ctx, &instancepb.DeleteInstanceRequest{
