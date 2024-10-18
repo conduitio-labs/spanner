@@ -12,9 +12,9 @@ var version = "(devel)"
 func Specification() sdk.Specification {
 	return sdk.Specification{
 		Name:        "spanner",
-		Summary:     "<describe your connector>",
-		Description: "<describe your connector in detail>",
+		Summary:     "A Conduit Connector for Spanner",
+		Description: "A source and destination connector for Spanner",
 		Version:     version,
-		Author:      "<your name>",
+		Author:      "Meroxa, Inc.",
 	}
 }

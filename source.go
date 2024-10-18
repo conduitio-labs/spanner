@@ -1,100 +1,167 @@
 package spanner
 
-//go:generate paramgen -output=paramgen_src.go SourceConfig
-
 import (
 	"context"
+	"errors"
 	"fmt"
 
+	"cloud.google.com/go/spanner"
+	"github.com/conduitio-labs/conduit-connector-spanner/common"
 	"github.com/conduitio/conduit-commons/config"
 	"github.com/conduitio/conduit-commons/opencdc"
 	sdk "github.com/conduitio/conduit-connector-sdk"
+	"google.golang.org/api/iterator"
 )
 
 type Source struct {
 	sdk.UnimplementedSource
 
-	config           SourceConfig
-	lastPositionRead opencdc.Position //nolint:unused // this is just an example
-}
-
-type SourceConfig struct {
-	// Config includes parameters that are the same in the source and destination.
-	Config
-	// SourceConfigParam is named foo and must be provided by the user.
-	SourceConfigParam string `json:"foo" validate:"required"`
+	client   *spanner.Client
+	iterator *snapshotIterator
+	config   SourceConfig
 }
 
 func NewSource() sdk.Source {
-	// Create Source and wrap it in the default middleware.
-	return sdk.SourceWithMiddleware(&Source{}, sdk.DefaultSourceMiddleware()...)
+	enabled := false
+	return sdk.SourceWithMiddleware(&Source{}, sdk.DefaultSourceMiddleware(
+		sdk.SourceWithSchemaExtractionConfig{
+			PayloadEnabled: &enabled,
+			KeyEnabled:     &enabled,
+		},
+	)...)
 }
 
 func (s *Source) Parameters() config.Parameters {
-	// Parameters is a map of named Parameters that describe how to configure
-	// the Source. Parameters can be generated from SourceConfig with paramgen.
 	return s.config.Parameters()
 }
 
 func (s *Source) Configure(ctx context.Context, cfg config.Config) error {
-	// Configure is the first function to be called in a connector. It provides
-	// the connector with the configuration that can be validated and stored.
-	// In case the configuration is not valid it should return an error.
-	// Testing if your connector can reach the configured data source should be
-	// done in Open, not in Configure.
-	// The SDK will validate the configuration and populate default values
-	// before calling Configure. If you need to do more complex validations you
-	// can do them manually here.
-
-	sdk.Logger(ctx).Info().Msg("Configuring Source...")
-	err := sdk.Util.ParseConfig(ctx, cfg, &s.config, NewSource().Parameters())
+	err := sdk.Util.ParseConfig(ctx, cfg, &s.config, s.config.Parameters())
 	if err != nil {
 		return fmt.Errorf("invalid config: %w", err)
 	}
+	sdk.Logger(ctx).Info().Msg("configured source")
+
 	return nil
 }
 
-func (s *Source) Open(_ context.Context, _ opencdc.Position) error {
-	// Open is called after Configure to signal the plugin it can prepare to
-	// start producing records. If needed, the plugin should open connections in
-	// this function. The position parameter will contain the position of the
-	// last record that was successfully processed, Source should therefore
-	// start producing records after this position. The context passed to Open
-	// will be cancelled once the plugin receives a stop signal from Conduit.
+func (s *Source) Open(ctx context.Context, pos opencdc.Position) (err error) {
+	s.client, err = common.NewClient(ctx, common.NewClientConfig{
+		DatabaseName: s.config.Database,
+		Endpoint:     s.config.Endpoint,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create spanner client: %w", err)
+	}
+	sdk.Logger(ctx).Info().Msg("created spanner client")
+
+	tableKeys, err := getTableKeys(ctx, s.client, s.config.Tables)
+	if err != nil {
+		return fmt.Errorf("failed to get table primary keys: %w", err)
+	}
+
+	sdk.Logger(ctx).Info().Msg("got primary keys from tables")
+
+	if pos != nil {
+		parsed, err := common.ParseSDKPosition(pos)
+		if err != nil {
+			return fmt.Errorf("failed to parse position when opening connector: %w", err)
+		}
+
+		if parsed.Kind == common.PositionTypeSnapshot {
+			s.iterator = newSnapshotIterator(ctx, snapshotIteratorConfig{
+				tableKeys: tableKeys,
+				client:    s.client,
+				position:  parsed.SnapshotPosition,
+			})
+		} else {
+			//nolint:err113 // will be supported soon
+			return fmt.Errorf("unsupported cdc mode")
+		}
+	} else {
+		s.iterator = newSnapshotIterator(ctx, snapshotIteratorConfig{
+			tableKeys: tableKeys,
+			client:    s.client,
+		})
+	}
+
+	sdk.Logger(ctx).Info().Msg("opened source")
+
 	return nil
 }
 
-func (s *Source) Read(_ context.Context) (opencdc.Record, error) {
-	// Read returns a new Record and is supposed to block until there is either
-	// a new record or the context gets cancelled. It can also return the error
-	// ErrBackoffRetry to signal to the SDK it should call Read again with a
-	// backoff retry.
-	// If Read receives a cancelled context or the context is cancelled while
-	// Read is running it must stop retrieving new records from the source
-	// system and start returning records that have already been buffered. If
-	// there are no buffered records left Read must return the context error to
-	// signal a graceful stop. If Read returns ErrBackoffRetry while the context
-	// is cancelled it will also signal that there are no records left and Read
-	// won't be called again.
-	// After Read returns an error the function won't be called again (except if
-	// the error is ErrBackoffRetry, as mentioned above).
-	// Read can be called concurrently with Ack.
-	return opencdc.Record{}, nil
+func (s *Source) Read(ctx context.Context) (rec opencdc.Record, err error) {
+	return s.iterator.Read(ctx)
 }
 
-func (s *Source) Ack(_ context.Context, _ opencdc.Position) error {
-	// Ack signals to the implementation that the record with the supplied
-	// position was successfully processed. This method might be called after
-	// the context of Read is already cancelled, since there might be
-	// outstanding acks that need to be delivered. When Teardown is called it is
-	// guaranteed there won't be any more calls to Ack.
-	// Ack can be called concurrently with Read.
+func (s *Source) Ack(ctx context.Context, pos opencdc.Position) error {
+	return s.iterator.Ack(ctx, pos)
+}
+
+func (s *Source) Teardown(ctx context.Context) error {
+	defer func() {
+		if s.client != nil {
+			s.client.Close()
+		}
+	}()
+	if s.iterator != nil {
+		if err := s.iterator.Teardown(ctx); err != nil {
+			return fmt.Errorf("failed to teardown iterator: %w", err)
+		}
+	}
+
 	return nil
 }
 
-func (s *Source) Teardown(_ context.Context) error {
-	// Teardown signals to the plugin that there will be no more calls to any
-	// other function. After Teardown returns, the plugin should be ready for a
-	// graceful shutdown.
-	return nil
+func getPrimaryKey(
+	ctx context.Context,
+	client *spanner.Client,
+	table string,
+) (common.PrimaryKeyName, error) {
+	stmt := spanner.Statement{
+		SQL: `
+			SELECT COLUMN_NAME
+			FROM INFORMATION_SCHEMA.INDEX_COLUMNS
+			WHERE TABLE_NAME = @table
+			AND INDEX_NAME = 'PRIMARY_KEY'
+			ORDER BY ORDINAL_POSITION LIMIT 1
+		`,
+		Params: map[string]interface{}{
+			"table": table,
+		},
+	}
+
+	iter := client.Single().Query(ctx, stmt)
+	defer iter.Stop()
+
+	row, err := iter.Next()
+	if errors.Is(err, iterator.Done) {
+		return "", ErrPrimaryKeyNotFound
+	}
+	if err != nil {
+		return "", fmt.Errorf("failed to get primary key from table %s: %w", table, err)
+	}
+
+	var columnName common.PrimaryKeyName
+	if err := row.Columns(&columnName); err != nil {
+		return "", fmt.Errorf("failed to scan primary key from table %s: %w", table, err)
+	}
+
+	return columnName, nil
+}
+
+func getTableKeys(
+	ctx context.Context,
+	client *spanner.Client,
+	tables []string,
+) (common.TableKeys, error) {
+	tableKeys := make(common.TableKeys)
+	for _, table := range tables {
+		primaryKey, err := getPrimaryKey(ctx, client, table)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get primary key for table %q: %w", table, err)
+		}
+		tableKeys[common.TableName(table)] = primaryKey
+	}
+	return tableKeys, nil
 }

@@ -8,23 +8,30 @@ import (
 )
 
 const (
-	SourceConfigFoo                   = "foo"
-	SourceConfigGlobalConfigParamName = "global_config_param_name"
+	SourceConfigDatabase = "database"
+	SourceConfigEndpoint = "endpoint"
+	SourceConfigTables   = "tables"
 )
 
 func (SourceConfig) Parameters() map[string]config.Parameter {
 	return map[string]config.Parameter{
-		SourceConfigFoo: {
+		SourceConfigDatabase: {
 			Default:     "",
-			Description: "SourceConfigParam is named foo and must be provided by the user.",
+			Description: "Database is the name of the database to use. A valid database name has the\nform projects/PROJECT_ID/instances/INSTANCE_ID/databases/DATABASE_ID",
 			Type:        config.ParameterTypeString,
 			Validations: []config.Validation{
 				config.ValidationRequired{},
 			},
 		},
-		SourceConfigGlobalConfigParamName: {
+		SourceConfigEndpoint: {
 			Default:     "",
-			Description: "GlobalConfigParam is named global_config_param_name and needs to be\nprovided by the user.",
+			Description: "Endpoint is the URL for endpoint override - testing/dry-run only",
+			Type:        config.ParameterTypeString,
+			Validations: []config.Validation{},
+		},
+		SourceConfigTables: {
+			Default:     "",
+			Description: "Tables represents the spanner tables to read from.",
 			Type:        config.ParameterTypeString,
 			Validations: []config.Validation{
 				config.ValidationRequired{},

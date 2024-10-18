@@ -1,6 +1,7 @@
-# Configure the services needed for the integration tests.
-# More information at https://docs.docker.com/compose/
-version: "3.9"
 services:
-  hello-world:
-    image: "hello-world:latest"
+  spanner-emulator:
+    container_name: spanner
+    image: gcr.io/cloud-spanner-emulator/emulator
+    ports:
+      - "9010:9010"
+      - "9020:9020"

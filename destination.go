@@ -17,16 +17,11 @@ type Destination struct {
 	config DestinationConfig
 }
 
-type DestinationConfig struct {
-	// Config includes parameters that are the same in the source and destination.
-	Config
-	// DestinationConfigParam must be either yes or no (defaults to yes).
-	DestinationConfigParam string `validate:"inclusion=yes|no" default:"yes"`
-}
+type DestinationConfig struct{}
 
 func NewDestination() sdk.Destination {
 	// Create Destination and wrap it in the default middleware.
-	return sdk.DestinationWithMiddleware(&Destination{}, sdk.DefaultDestinationMiddleware()...)
+	return sdk.DestinationWithMiddleware(new(Destination), sdk.DefaultDestinationMiddleware()...)
 }
 
 func (d *Destination) Parameters() config.Parameters {

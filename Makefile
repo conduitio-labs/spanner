@@ -33,3 +33,11 @@ fmt:
 .PHONY: lint
 lint:
 	golangci-lint run
+
+.PHONY: up
+up:
+	docker compose -f test/docker-compose.yml up --wait
+
+.PHONY: down
+down:
+	docker compose -f test/docker-compose.yml down -v --remove-orphans

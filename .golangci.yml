@@ -46,6 +46,7 @@ linters:
     - bodyclose
     - containedctx
     - contextcheck
+    - copyloopvar
     - decorder
     # - depguard
     - dogsled
@@ -57,7 +58,8 @@ linters:
     - errname
     - errorlint
     - exhaustive
-    - exportloopref
+    # - exportloopref
+    - copyloopvar
     # - forbidigo
     - forcetypeassert
     - funlen
@@ -65,9 +67,9 @@ linters:
     - ginkgolinter
     - gocheckcompilerdirectives
     - gochecknoinits
-    - gocognit
+    # - gocognit
     - goconst
-    - gocritic
+    # - gocritic
     - godot
     - err113
     - gofmt
