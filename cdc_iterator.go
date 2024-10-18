@@ -34,6 +34,8 @@ type (
 
 var _ common.Iterator = new(cdcIterator)
 
+var ErrDataChangeRecordModEmpty = fmt.Errorf("empty data change record modification maps")
+
 func newCdcIterator(ctx context.Context, config *cdcIteratorConfig) (*cdcIterator, error) {
 	databaseName := fmt.Sprintf(
 		"projects/%s/instances/%s/databases/%s",
@@ -111,10 +113,10 @@ func checkIfStreamExists(ctx context.Context, client *spanner.Client, streamID s
 	var count int64
 	row, err := iter.Next()
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("failed to get count of change stream %s: %w", streamID, err)
 	}
 	if err := row.Columns(&count); err != nil {
-		return false, err
+		return false, fmt.Errorf("failed to scan count of change stream %s: %w", streamID, err)
 	}
 
 	return count > 0, nil
@@ -144,7 +146,7 @@ func (c *cdcIterator) startReader(ctx context.Context, streamID string) {
 					} else if len(before) > 0 && len(after) > 0 {
 						operation = opencdc.OperationUpdate
 					} else {
-						return fmt.Errorf("data change record modification maps are empty, something unexpected happened")
+						return ErrDataChangeRecordModEmpty
 					}
 
 					metadata := opencdc.Metadata{}

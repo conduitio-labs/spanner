@@ -2,6 +2,7 @@ package common
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -26,7 +27,12 @@ func NewClient(ctx context.Context, config NewClientConfig) (*spanner.Client, er
 		options = append(options, option.WithEndpoint(config.Endpoint))
 	}
 
-	return spanner.NewClient(ctx, config.DatabaseName, options...)
+	client, err := spanner.NewClient(ctx, config.DatabaseName, options...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create spanner client: %w", err)
+	}
+
+	return client, nil
 }
 
 func NewDatabaseAdminClientWithEndpoint(
@@ -40,7 +46,12 @@ func NewDatabaseAdminClientWithEndpoint(
 		options = append(options, option.WithEndpoint(endpoint))
 	}
 
-	return database.NewDatabaseAdminClient(ctx, options...)
+	client, err := database.NewDatabaseAdminClient(ctx, options...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create database admin client: %w", err)
+	}
+
+	return client, nil
 }
 
 func ClientOptions(endpoint string) []option.ClientOption {

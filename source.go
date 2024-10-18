@@ -65,7 +65,7 @@ func (s *Source) Open(ctx context.Context, pos opencdc.Position) (err error) {
 	if pos != nil {
 		parsed, err := common.ParseSDKPosition(pos)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to parse position when opening connector: %w", err)
 		}
 
 		if parsed.Kind == common.PositionTypeSnapshot {
@@ -75,6 +75,7 @@ func (s *Source) Open(ctx context.Context, pos opencdc.Position) (err error) {
 				position:  parsed.SnapshotPosition,
 			})
 		} else {
+			//nolint:err113 // will be supported soon
 			return fmt.Errorf("unsupported cdc mode")
 		}
 	} else {
@@ -135,7 +136,7 @@ func getPrimaryKey(
 
 	row, err := iter.Next()
 	if errors.Is(err, iterator.Done) {
-		return "", fmt.Errorf("no primary key found for table %s", table)
+		return "", ErrPrimaryKeyNotFound
 	}
 	if err != nil {
 		return "", fmt.Errorf("failed to get primary key from table %s: %w", table, err)

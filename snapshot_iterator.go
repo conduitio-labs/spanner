@@ -166,12 +166,6 @@ func (s *snapshotIterator) fetchTable(
 	sdk.Logger(ctx).Debug().Msgf("starting fetching rows from table %s", tableName)
 	defer sdk.Logger(ctx).Debug().Msgf("finished fetching rows for table %s", tableName)
 
-	sdk.Logger(ctx).Debug().Msgf("starting fetching rows from table %s", tableName)
-	defer sdk.Logger(ctx).Debug().Msgf("finished fetching rows for table %s", tableName)
-
-	sdk.Logger(ctx).Debug().Msgf("starting fetching rows from table %s", tableName)
-	defer sdk.Logger(ctx).Debug().Msgf("finished fetching rows for table %s", tableName)
-
 	for ; ; start++ {
 		row, err := iter.Next()
 		if errors.Is(err, iterator.Done) {
@@ -180,34 +174,15 @@ func (s *snapshotIterator) fetchTable(
 			return fmt.Errorf("failed to fetch next row: %w", err)
 		}
 
-		decodedRow, err := decodeRow(ctx, row)
+		data, err := buildFetchData(ctx, row, tableName, primaryKey, start, end)
 		if err != nil {
-			return fmt.Errorf("failed to decode row: %w", err)
+			return fmt.Errorf("failed to build fetch data: %w", err)
 		}
-
-		primaryKeyVal, ok := decodedRow[string(primaryKey)]
-		if !ok {
-			sdk.Logger(ctx).Warn().Msgf("primary key %s not found in row %v", primaryKey, decodedRow)
-			return ErrPrimaryKeyNotFound
-		}
-
-		data := fetchData{
-			payload:        decodedRow,
-			table:          tableName,
-			primaryKeyName: primaryKey,
-			primaryKeyVal:  primaryKeyVal,
-
-			position: common.TablePosition{
-				LastRead:    start + 1,
-				SnapshotEnd: end,
-			},
-		}
-
-		sdk.Logger(ctx).Trace().Msgf("sending row %v", decodedRow)
 
 		select {
 		case s.dataC <- data:
 		case <-s.t.Dead():
+			//nolint:wrapcheck // context error, no need to wrap
 			return s.t.Err()
 		case <-ctx.Done():
 			return ctx.Err()
@@ -217,34 +192,68 @@ func (s *snapshotIterator) fetchTable(
 	return nil
 }
 
+func buildFetchData(
+	ctx context.Context,
+	row *spanner.Row,
+	tableName common.TableName, primaryKey common.PrimaryKeyName,
+	start, end int64,
+) (fetchData, error) {
+	decodedRow, err := decodeRow(ctx, row)
+	if err != nil {
+		return fetchData{}, fmt.Errorf("failed to decode row: %w", err)
+	}
+
+	primaryKeyVal, ok := decodedRow[string(primaryKey)]
+	if !ok {
+		sdk.Logger(ctx).Warn().Msgf("primary key %s not found in row %v", primaryKey, decodedRow)
+		return fetchData{}, ErrPrimaryKeyNotFound
+	}
+
+	return fetchData{
+		payload:        decodedRow,
+		table:          tableName,
+		primaryKeyName: primaryKey,
+		primaryKeyVal:  primaryKeyVal,
+		position: common.TablePosition{
+			LastRead:    start + 1,
+			SnapshotEnd: end,
+		},
+	}, nil
+}
+
+func querySingleRow(
+	ctx context.Context, tx *spanner.ReadOnlyTransaction,
+	stmt spanner.Statement, out any,
+) error {
+	iter := tx.Query(ctx, stmt)
+	defer iter.Stop()
+
+	row, err := iter.Next()
+	if err != nil {
+		return fmt.Errorf("failed to fetch row: %w", err)
+	}
+	if err := row.ToStruct(&out); err != nil {
+		return fmt.Errorf("failed to decode row: %w", err)
+	}
+
+	return nil
+}
+
 func (s *snapshotIterator) fetchStartEnd(
 	ctx context.Context,
-	ro *spanner.ReadOnlyTransaction,
+	tx *spanner.ReadOnlyTransaction,
 	tableName common.TableName,
 ) (start, end int64, err error) {
 	{ // fetch the start
-		query := fmt.Sprintf(
+		stmt := spanner.Statement{SQL: fmt.Sprintf(
 			"SELECT MIN(%s) as min_value FROM %s",
 			s.config.tableKeys[tableName], tableName,
-		)
-		stmt := spanner.Statement{
-			SQL:    query,
-			Params: nil,
-		}
-		iter := ro.Query(ctx, stmt)
-		defer iter.Stop()
-
+		)}
 		var result struct {
 			MinValue int64 `spanner:"min_value"`
 		}
-
-		row, err := iter.Next()
-		if err != nil {
-			return start, end, err
-		}
-
-		if err := row.ToStruct(&result); err != nil {
-			return start, end, err
+		if err := querySingleRow(ctx, tx, stmt, &result); err != nil {
+			return 0, 0, fmt.Errorf("failed to fetch min value: %w", err)
 		}
 
 		minVal := result.MinValue
@@ -258,25 +267,15 @@ func (s *snapshotIterator) fetchStartEnd(
 		}
 	}
 	{ // fetch the end
-		query := fmt.Sprintf(`
-			SELECT MAX(%s) AS count FROM %s`,
+		stmt := spanner.Statement{SQL: fmt.Sprintf(
+			"SELECT MAX(%s) AS count FROM %s",
 			s.config.tableKeys[tableName], tableName,
-		)
-		stmt := spanner.Statement{SQL: query}
-		iter := ro.Query(ctx, stmt)
-		defer iter.Stop()
-
+		)}
 		var result struct {
 			Count int64 `spanner:"count"`
 		}
-
-		row, err := iter.Next()
-		if err != nil {
-			return start, end, err
-		}
-
-		if err := row.ToStruct(&result); err != nil {
-			return start, end, err
+		if err := querySingleRow(ctx, tx, stmt, &result); err != nil {
+			return 0, 0, fmt.Errorf("failed to fetch max value: %w", err)
 		}
 
 		end = result.Count
