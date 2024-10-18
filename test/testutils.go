@@ -39,7 +39,7 @@ var (
 )
 
 var TableKeys = common.TableKeys{
-	"singers": "SingerID",
+	"Singers": "SingerID",
 }
 
 var EmulatorHost = "localhost:9010"
@@ -156,7 +156,7 @@ func (s Singer) ToStructuredData() opencdc.StructuredData {
 	}
 }
 
-func InsertSinger(ctx context.Context, is *is.I, singerID int, singerName string) Singer {
+func InsertSinger(ctx context.Context, is *is.I, singerID int) Singer {
 	client := NewClient(ctx, is)
 	defer client.Close()
 
@@ -200,6 +200,40 @@ func DeleteSinger(ctx context.Context, is *is.I, singer Singer) {
 		spanner.Delete("Singers", spanner.Key{singer.SingerID}),
 	})
 	is.NoErr(err)
+}
+
+func UpdateSinger(ctx context.Context, is *is.I, singer Singer) Singer {
+	client := NewClient(ctx, is)
+	defer client.Close()
+
+	var updatedSinger Singer
+
+	tx := func(ctx context.Context, txn *spanner.ReadWriteTransaction) error {
+		stmt := spanner.Statement{
+			SQL: `UPDATE Singers SET Name = @name WHERE SingerID = @singerID`,
+			Params: map[string]interface{}{
+				"singerID": singer.SingerID,
+				"name":     singer.Name,
+			},
+		}
+		if _, err := txn.Update(ctx, stmt); err != nil {
+			return fmt.Errorf("failed to update singer: %w", err)
+		}
+
+		return txn.Query(ctx, spanner.Statement{
+			SQL: "SELECT * FROM Singers WHERE SingerID = @singerID",
+			Params: map[string]interface{}{
+				"singerID": singer.SingerID,
+			},
+		}).Do(func(r *spanner.Row) error {
+			return r.ToStruct(&updatedSinger)
+		})
+	}
+
+	_, err := client.ReadWriteTransaction(ctx, tx)
+	is.NoErr(err)
+
+	return updatedSinger
 }
 
 func ReadAndAssertSnapshot(

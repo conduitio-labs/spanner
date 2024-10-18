@@ -66,9 +66,9 @@ func TestCDCIterator_InsertAction(t *testing.T) {
 	iterator, teardown := testCdcIterator(ctx, is)
 	defer teardown()
 
-	user1 := singersTable.Insert(ctx, is, 1)
-	user2 := singersTable.Insert(ctx, is, 2)
-	user3 := singersTable.Insert(ctx, is, 3)
+	user1 := testutils.InsertSinger(ctx, is, 1)
+	user2 := testutils.InsertSinger(ctx, is, 2)
+	user3 := testutils.InsertSinger(ctx, is, 3)
 
 	testutils.ReadAndAssertInsert(ctx, is, iterator, user1)
 	testutils.ReadAndAssertInsert(ctx, is, iterator, user2)
@@ -81,16 +81,16 @@ func TestCDCIterator_DeleteAction(t *testing.T) {
 
 	testutils.SetupDatabase(ctx, is)
 
-	user1 := singersTable.Insert(ctx, is, 1)
-	user2 := singersTable.Insert(ctx, is, 2)
-	user3 := singersTable.Insert(ctx, is, 3)
+	user1 := testutils.InsertSinger(ctx, is, 1)
+	user2 := testutils.InsertSinger(ctx, is, 2)
+	user3 := testutils.InsertSinger(ctx, is, 3)
 
 	iterator, teardown := testCdcIterator(ctx, is)
 	defer teardown()
 
-	singersTable.Delete(ctx, is, user1)
-	singersTable.Delete(ctx, is, user2)
-	singersTable.Delete(ctx, is, user3)
+	testutils.DeleteSinger(ctx, is, user1)
+	testutils.DeleteSinger(ctx, is, user2)
+	testutils.DeleteSinger(ctx, is, user3)
 
 	testutils.ReadAndAssertDelete(ctx, is, iterator, user1)
 	testutils.ReadAndAssertDelete(ctx, is, iterator, user2)
@@ -103,16 +103,16 @@ func TestCDCIterator_UpdateAction(t *testing.T) {
 
 	testutils.SetupDatabase(ctx, is)
 
-	user1 := singersTable.Insert(ctx, is, 1)
-	user2 := singersTable.Insert(ctx, is, 2)
-	user3 := singersTable.Insert(ctx, is, 3)
+	user1 := testutils.InsertSinger(ctx, is, 1)
+	user2 := testutils.InsertSinger(ctx, is, 2)
+	user3 := testutils.InsertSinger(ctx, is, 3)
 
 	iterator, teardown := testCdcIterator(ctx, is)
 	defer teardown()
 
-	user1Updated := singersTable.Update(ctx, is, user1.Update())
-	user2Updated := singersTable.Update(ctx, is, user2.Update())
-	user3Updated := singersTable.Update(ctx, is, user3.Update())
+	user1Updated := testutils.UpdateSinger(ctx, is, user1.Update())
+	user2Updated := testutils.UpdateSinger(ctx, is, user2.Update())
+	user3Updated := testutils.UpdateSinger(ctx, is, user3.Update())
 
 	testutils.ReadAndAssertUpdate(ctx, is, iterator, user1, user1Updated)
 	testutils.ReadAndAssertUpdate(ctx, is, iterator, user2, user2Updated)
@@ -131,10 +131,10 @@ func TestCDCIterator_RestartOnPosition(t *testing.T) {
 
 	// and trigger some insert actions
 
-	user1 := singersTable.Insert(ctx, is, 1)
-	user2 := singersTable.Insert(ctx, is, 2)
-	user3 := singersTable.Insert(ctx, is, 3)
-	user4 := singersTable.Insert(ctx, is, 4)
+	user1 := testutils.InsertSinger(ctx, is, 1)
+	user2 := testutils.InsertSinger(ctx, is, 2)
+	user3 := testutils.InsertSinger(ctx, is, 3)
+	user4 := testutils.InsertSinger(ctx, is, 4)
 
 	var latestPosition opencdc.Position
 
@@ -150,7 +150,7 @@ func TestCDCIterator_RestartOnPosition(t *testing.T) {
 	iterator, teardown = testCdcIteratorAtPosition(ctx, is, latestPosition)
 	defer teardown()
 
-	user5 := singersTable.Insert(ctx, is, 5)
+	user5 := testutils.InsertSinger(ctx, is, 5)
 
 	testutils.ReadAndAssertInsert(ctx, is, iterator, user3)
 	testutils.ReadAndAssertInsert(ctx, is, iterator, user4)

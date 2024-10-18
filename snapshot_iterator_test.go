@@ -25,18 +25,17 @@ func TestSnapshot(t *testing.T) {
 	is := is.New(t)
 	ctx := testutils.TestContext(t)
 
-	testutils.CreateInstance(ctx, is)
 	testutils.SetupDatabase(ctx, is)
 
 	var singers []testutils.Singer
 
-	singer1 := testutils.InsertSinger(ctx, is, 1, "singer1")
+	singer1 := testutils.InsertSinger(ctx, is, 1)
 	singers = append(singers, singer1)
 
-	singer2 := testutils.InsertSinger(ctx, is, 2, "singer2")
+	singer2 := testutils.InsertSinger(ctx, is, 2)
 	singers = append(singers, singer2)
 
-	singer3 := testutils.InsertSinger(ctx, is, 3, "singer3")
+	singer3 := testutils.InsertSinger(ctx, is, 3)
 	singers = append(singers, singer3)
 
 	iterator, stopIterator := testSnapshotIterator(ctx, is)
