@@ -221,22 +221,24 @@ func buildFetchData(
 	}, nil
 }
 
-func querySingleRow(
+func querySingleRow[T any](
 	ctx context.Context, tx *spanner.ReadOnlyTransaction,
-	stmt spanner.Statement, out any,
-) error {
+	stmt spanner.Statement,
+) (*T, error) {
+	var val T
+
 	iter := tx.Query(ctx, stmt)
 	defer iter.Stop()
 
 	row, err := iter.Next()
 	if err != nil {
-		return fmt.Errorf("failed to fetch row: %w", err)
+		return nil, fmt.Errorf("failed to fetch row: %w", err)
 	}
-	if err := row.ToStruct(&out); err != nil {
-		return fmt.Errorf("failed to decode row: %w", err)
+	if err := row.ToStruct(&val); err != nil {
+		return nil, fmt.Errorf("failed to decode row: %w", err)
 	}
 
-	return nil
+	return &val, nil
 }
 
 func (s *snapshotIterator) fetchStartEnd(
@@ -244,19 +246,21 @@ func (s *snapshotIterator) fetchStartEnd(
 	tx *spanner.ReadOnlyTransaction,
 	tableName common.TableName,
 ) (start, end int64, err error) {
+	type Result struct {
+		Out int64 `spanner:"out"`
+	}
+
 	{ // fetch the start
 		stmt := spanner.Statement{SQL: fmt.Sprintf(
-			"SELECT MIN(%s) as min_value FROM %s",
+			"SELECT MIN(%s) AS out FROM %s",
 			s.config.tableKeys[tableName], tableName,
 		)}
-		var result struct {
-			MinValue int64 `spanner:"min_value"`
-		}
-		if err := querySingleRow(ctx, tx, stmt, &result); err != nil {
+		result, err := querySingleRow[Result](ctx, tx, stmt)
+		if err != nil {
 			return 0, 0, fmt.Errorf("failed to fetch min value: %w", err)
 		}
 
-		minVal := result.MinValue
+		minVal := result.Out
 
 		lastRead := s.lastPosition.Snapshots[tableName].LastRead
 		if lastRead > minVal {
@@ -268,17 +272,15 @@ func (s *snapshotIterator) fetchStartEnd(
 	}
 	{ // fetch the end
 		stmt := spanner.Statement{SQL: fmt.Sprintf(
-			"SELECT MAX(%s) AS count FROM %s",
+			"SELECT MAX(%s) AS out FROM %s",
 			s.config.tableKeys[tableName], tableName,
 		)}
-		var result struct {
-			Count int64 `spanner:"count"`
-		}
-		if err := querySingleRow(ctx, tx, stmt, &result); err != nil {
+		result, err := querySingleRow[Result](ctx, tx, stmt)
+		if err != nil {
 			return 0, 0, fmt.Errorf("failed to fetch max value: %w", err)
 		}
 
-		end = result.Count
+		end = result.Out
 	}
 
 	return start, end, nil
