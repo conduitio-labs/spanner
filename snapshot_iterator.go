@@ -221,67 +221,42 @@ func buildFetchData(
 	}, nil
 }
 
-func querySingleRow[T any](
-	ctx context.Context, tx *spanner.ReadOnlyTransaction,
-	stmt spanner.Statement,
-) (*T, error) {
-	var val T
+func (s *snapshotIterator) fetchStartEnd(
+	ctx context.Context,
+	tx *spanner.ReadOnlyTransaction,
+	tableName common.TableName,
+) (start, end int64, err error) {
+	var result struct {
+		Min int64 `spanner:"min"`
+		Max int64 `spanner:"max"`
+	}
+	col := s.config.tableKeys[tableName]
+	stmt := spanner.Statement{SQL: fmt.Sprintf(
+		"SELECT MIN(%s) AS min, MAX(%s) AS max FROM %s",
+		col, col, tableName,
+	)}
 
 	iter := tx.Query(ctx, stmt)
 	defer iter.Stop()
 
 	row, err := iter.Next()
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch row: %w", err)
-	}
-	if err := row.ToStruct(&val); err != nil {
-		return nil, fmt.Errorf("failed to decode row: %w", err)
+		return 0, 0, fmt.Errorf("failed to fetch row: %w", err)
 	}
 
-	return &val, nil
-}
-
-func (s *snapshotIterator) fetchStartEnd(
-	ctx context.Context,
-	tx *spanner.ReadOnlyTransaction,
-	tableName common.TableName,
-) (start, end int64, err error) {
-	type Result struct {
-		Out int64 `spanner:"out"`
+	if err := row.ToStruct(&result); err != nil {
+		return 0, 0, fmt.Errorf("failed to decode row: %w", err)
 	}
 
-	{ // fetch the start
-		stmt := spanner.Statement{SQL: fmt.Sprintf(
-			"SELECT MIN(%s) AS out FROM %s",
-			s.config.tableKeys[tableName], tableName,
-		)}
-		result, err := querySingleRow[Result](ctx, tx, stmt)
-		if err != nil {
-			return 0, 0, fmt.Errorf("failed to fetch min value: %w", err)
-		}
-
-		minVal := result.Out
-
-		lastRead := s.lastPosition.Snapshots[tableName].LastRead
-		if lastRead > minVal {
-			// last read takes preference, as previous records where already fetched
-			start = lastRead
-		} else {
-			start = minVal
-		}
+	lastRead := s.lastPosition.Snapshots[tableName].LastRead
+	if lastRead > result.Min {
+		// last read takes preference, as previous records where already fetched
+		start = lastRead
+	} else {
+		start = result.Min
 	}
-	{ // fetch the end
-		stmt := spanner.Statement{SQL: fmt.Sprintf(
-			"SELECT MAX(%s) AS out FROM %s",
-			s.config.tableKeys[tableName], tableName,
-		)}
-		result, err := querySingleRow[Result](ctx, tx, stmt)
-		if err != nil {
-			return 0, 0, fmt.Errorf("failed to fetch max value: %w", err)
-		}
 
-		end = result.Out
-	}
+	end = result.Max
 
 	return start, end, nil
 }
