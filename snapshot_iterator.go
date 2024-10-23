@@ -292,6 +292,7 @@ func handleSpannerTypeCode[T any](
 	return val, nil
 }
 
+//nolint:funlen // already very concise
 func decodeRow(ctx context.Context, row *spanner.Row) (opencdc.StructuredData, error) {
 	data := make(opencdc.StructuredData)
 	for i, column := range row.ColumnNames() {
@@ -322,12 +323,11 @@ func decodeRow(ctx context.Context, row *spanner.Row) (opencdc.StructuredData, e
 			val, err = handleSpannerTypeCode[*big.Rat](row, i)
 		case spannerpb.TypeCode_JSON:
 			val, err = handleSpannerTypeCode[json.RawMessage](row, i)
+		case spannerpb.TypeCode_INTERVAL:
+			val, err = handleSpannerTypeCode[string](row, i)
 		case spannerpb.TypeCode_TYPE_CODE_UNSPECIFIED:
 			val, err = handleSpannerTypeCode[any](row, i)
-			sdk.Logger(ctx).Warn().Msgf(
-				"column %s has unspecified type %v for value %v",
-				column, code, val,
-			)
+			sdk.Logger(ctx).Warn().Msgf("column %s has unspecified type %v for value %v", column, code, val)
 		default:
 			sdk.Logger(ctx).Warn().Msgf("unidentified type %v for column %v", code, column)
 			return nil, ErrUnsupportedColumnType

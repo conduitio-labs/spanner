@@ -4,7 +4,7 @@ go 1.23.2
 
 require (
 	cloud.google.com/go v0.116.0
-	cloud.google.com/go/spanner v1.69.0
+	cloud.google.com/go/spanner v1.70.0
 	github.com/cloudspannerecosystem/spanner-change-streams-tail v0.3.1
 	github.com/conduitio/conduit-commons v0.4.0
 	github.com/conduitio/conduit-connector-sdk v0.11.0
