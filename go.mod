@@ -13,7 +13,7 @@ require (
 	github.com/matryer/is v1.4.1
 	github.com/rs/zerolog v1.33.0
 	google.golang.org/api v0.205.0
-	google.golang.org/grpc v1.67.1
+	google.golang.org/grpc v1.68.0
 	gopkg.in/tomb.v2 v2.0.0-20161208151619-d5d1b5820637
 	mvdan.cc/gofumpt v0.7.0
 )
