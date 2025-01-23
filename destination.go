@@ -14,12 +14,12 @@
 
 package spanner
 
-//go:generate paramgen -output=paramgen_dest.go DestinationConfig
-
 import (
 	"context"
 	"fmt"
 
+	"cloud.google.com/go/spanner"
+	"github.com/conduitio-labs/conduit-connector-spanner/common"
 	"github.com/conduitio/conduit-commons/config"
 	"github.com/conduitio/conduit-commons/opencdc"
 	sdk "github.com/conduitio/conduit-connector-sdk"
@@ -27,11 +27,11 @@ import (
 
 type Destination struct {
 	sdk.UnimplementedDestination
+	writer *Writer
+	client *spanner.Client
 
 	config DestinationConfig
 }
-
-type DestinationConfig struct{}
 
 func NewDestination() sdk.Destination {
 	// Create Destination and wrap it in the default middleware.
@@ -46,41 +46,61 @@ func (d *Destination) Parameters() config.Parameters {
 }
 
 func (d *Destination) Configure(ctx context.Context, cfg config.Config) error {
-	// Configure is the first function to be called in a connector. It provides
-	// the connector with the configuration that can be validated and stored.
-	// In case the configuration is not valid it should return an error.
-	// Testing if your connector can reach the configured data source should be
-	// done in Open, not in Configure.
-	// The SDK will validate the configuration and populate default values
-	// before calling Configure. If you need to do more complex validations you
-	// can do them manually here.
-
 	sdk.Logger(ctx).Info().Msg("Configuring Destination...")
-	err := sdk.Util.ParseConfig(ctx, cfg, &d.config, NewDestination().Parameters())
+	err := sdk.Util.ParseConfig(ctx, cfg, &d.config, d.config.Parameters())
 	if err != nil {
 		return fmt.Errorf("invalid config: %w", err)
 	}
+	d.config.Init()
+	sdk.Logger(ctx).Info().Msg("configured destination")
 	return nil
 }
 
-func (d *Destination) Open(_ context.Context) error {
-	// Open is called after Configure to signal the plugin it can prepare to
-	// start writing records. If needed, the plugin should open connections in
-	// this function.
+func (d *Destination) Open(ctx context.Context) (err error) {
+	d.client, err = common.NewClient(ctx, common.NewClientConfig{
+		DatabaseName: d.config.Database,
+		Endpoint:     d.config.Endpoint,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create spanner client: %w", err)
+	}
+	sdk.Logger(ctx).Info().Msg("opened destination")
+
+	d.writer, err = NewWriter(ctx, d.client, d.config)
+	if err != nil {
+		return fmt.Errorf("new writer: %w", err)
+	}
+
 	return nil
 }
 
-func (d *Destination) Write(_ context.Context, _ []opencdc.Record) (int, error) {
-	// Write writes len(r) records from r to the destination right away without
-	// caching. It should return the number of records written from r
-	// (0 <= n <= len(r)) and any error encountered that caused the write to
-	// stop early. Write must return a non-nil error if it returns n < len(r).
-	return 0, nil
+func (d *Destination) Write(ctx context.Context, records []opencdc.Record) (int, error) {
+	for i, record := range records {
+		err := sdk.Util.Destination.Route(ctx, record,
+			d.writer.Insert,
+			d.writer.Update,
+			d.writer.Delete,
+			d.writer.Insert,
+		)
+		if err != nil {
+			if record.Key != nil {
+				return i, fmt.Errorf("key %s: %w", string(record.Key.Bytes()), err)
+			}
+			return i, fmt.Errorf("record with no key: %w", err)
+		}
+	}
+
+	return len(records), nil
 }
 
 func (d *Destination) Teardown(_ context.Context) error {
-	// Teardown signals to the plugin that all records were written and there
-	// will be no more calls to any other function. After Teardown returns, the
-	// plugin should be ready for a graceful shutdown.
+	if d.client != nil {
+		d.client.Close()
+	}
+	if d.writer != nil {
+		if err := d.writer.Stop(); err != nil {
+			return fmt.Errorf("stop writer: %w", err)
+		}
+	}
 	return nil
 }

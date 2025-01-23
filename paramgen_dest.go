@@ -7,8 +7,33 @@ import (
 	"github.com/conduitio/conduit-commons/config"
 )
 
-const ()
+const (
+	DestinationConfigDatabase = "database"
+	DestinationConfigEndpoint = "endpoint"
+	DestinationConfigTable    = "table"
+)
 
 func (DestinationConfig) Parameters() map[string]config.Parameter {
-	return map[string]config.Parameter{}
+	return map[string]config.Parameter{
+		DestinationConfigDatabase: {
+			Default:     "",
+			Description: "Database is the name of the database to use. A valid database name has the\nform projects/PROJECT_ID/instances/INSTANCE_ID/databases/DATABASE_ID",
+			Type:        config.ParameterTypeString,
+			Validations: []config.Validation{
+				config.ValidationRequired{},
+			},
+		},
+		DestinationConfigEndpoint: {
+			Default:     "",
+			Description: "Endpoint is the URL for endpoint.",
+			Type:        config.ParameterTypeString,
+			Validations: []config.Validation{},
+		},
+		DestinationConfigTable: {
+			Default:     "{{ index .Metadata \"opencdc.collection\" }}",
+			Description: "Table represents the spanner table to write data to.",
+			Type:        config.ParameterTypeString,
+			Validations: []config.Validation{},
+		},
+	}
 }
