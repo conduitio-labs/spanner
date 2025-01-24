@@ -60,7 +60,7 @@ func (w *Writer) Insert(ctx context.Context, record opencdc.Record) error {
 	if err != nil {
 		return fmt.Errorf("structurize payload: %w", err)
 	}
-	if payload == nil {
+	if len(payload) == 0 {
 		return ErrNoPayload
 	}
 
@@ -90,7 +90,7 @@ func (w *Writer) Update(ctx context.Context, record opencdc.Record) error {
 	if err != nil {
 		return fmt.Errorf("structurize payload: %w", err)
 	}
-	if payload == nil {
+	if len(payload) == 0 {
 		return ErrNoPayload
 	}
 

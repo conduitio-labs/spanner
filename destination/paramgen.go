@@ -11,7 +11,6 @@ const (
 	ConfigDatabase = "database"
 	ConfigEndpoint = "endpoint"
 	ConfigTable    = "table"
-	ConfigTables   = "tables"
 )
 
 func (Config) Parameters() map[string]config.Parameter {
@@ -35,14 +34,6 @@ func (Config) Parameters() map[string]config.Parameter {
 			Description: "Table represents the spanner table to write data to.",
 			Type:        config.ParameterTypeString,
 			Validations: []config.Validation{},
-		},
-		ConfigTables: {
-			Default:     "",
-			Description: "Tables represents the spanner tables to read from.",
-			Type:        config.ParameterTypeString,
-			Validations: []config.Validation{
-				config.ValidationRequired{},
-			},
 		},
 	}
 }
