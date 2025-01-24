@@ -12,16 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package spanner
+package common
 
-import (
-	"github.com/conduitio-labs/conduit-connector-spanner/destination"
-	sdk "github.com/conduitio/conduit-connector-sdk"
-)
-
-// Connector combines all constructors for each plugin in one struct.
-var Connector = sdk.Connector{
-	NewSpecification: Specification,
-	NewSource:        NewSource,
-	NewDestination:   destination.NewDestination,
+type Config struct {
+	// Database is the name of the database to use. A valid database name has the
+	// form projects/PROJECT_ID/instances/INSTANCE_ID/databases/DATABASE_ID
+	Database string `json:"database" validate:"required"`
+	// Endpoint is the URL for endpoint override - testing/dry-run only
+	Endpoint string `json:"endpoint"`
 }

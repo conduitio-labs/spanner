@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package spanner
+package destination
 
 import (
 	"bytes"
@@ -21,41 +21,36 @@ import (
 	"text/template"
 
 	"github.com/Masterminds/sprig/v3"
+	"github.com/conduitio-labs/conduit-connector-spanner/common"
 	"github.com/conduitio/conduit-commons/opencdc"
 )
 
-//go:generate paramgen -output=paramgen_dest.go DestinationConfig
+//go:generate paramgen -output=paramgen.go Config
 
-type DestinationConfig struct {
-	// Database is the name of the database to use. A valid database name has the
-	// form projects/PROJECT_ID/instances/INSTANCE_ID/databases/DATABASE_ID
-	Database string `json:"database" validate:"required"`
-
+type Config struct {
+	common.Config
 	// Table represents the spanner table to write data to.
 	Table string `json:"table" default:"{{ index .Metadata \"opencdc.collection\" }}"`
-
-	// Endpoint is the URL for endpoint.
-	Endpoint string `json:"endpoint"`
 }
 
 type TableFn func(opencdc.Record) (string, error)
 
 // Init sets lowercase "table" name if not a template.
-func (c DestinationConfig) Init() {
+func (c Config) Init() {
 	if !c.isTableTemplate() {
 		c.Table = strings.ToLower(c.Table)
 	}
 }
 
 // isTableTemplate returns true if "table" contains a template placeholder.
-func (c DestinationConfig) isTableTemplate() bool {
+func (c Config) isTableTemplate() bool {
 	return strings.Contains(c.Table, "{{") && strings.Contains(c.Table, "}}")
 }
 
 // TableFunction returns a function that determines the table for each record individually.
 // The function might be returning a static table name.
 // If the table is neither static nor a template, an error is returned.
-func (c DestinationConfig) TableFunction() (f TableFn, err error) {
+func (c Config) TableFunction() (f TableFn, err error) {
 	// Not a template, i.e. it's a static table name
 	if !c.isTableTemplate() {
 		return func(_ opencdc.Record) (string, error) {

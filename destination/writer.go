@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package spanner
+package destination
 
 import (
 	"context"
@@ -35,7 +35,7 @@ type Writer struct {
 }
 
 // NewWriter creates new instance of the Writer.
-func NewWriter(ctx context.Context, client *spanner.Client, config DestinationConfig) (*Writer, error) {
+func NewWriter(ctx context.Context, client *spanner.Client, config Config) (*Writer, error) {
 	tableFn, err := config.TableFunction()
 	if err != nil {
 		return nil, fmt.Errorf("invalid table name or table function: %w", err)
