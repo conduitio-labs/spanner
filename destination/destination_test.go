@@ -119,7 +119,7 @@ func TestDestination_Write(t *testing.T) {
 		is.NoErr(err)
 
 		records := []opencdc.Record{
-			opencdc.Record{
+			{
 				Operation: opencdc.OperationCreate,
 				Metadata:  opencdc.Metadata{"opencdc.collection": "singers"},
 				Key:       opencdc.StructuredData{"SingerID": 1},
@@ -156,7 +156,7 @@ func TestDestination_Write(t *testing.T) {
 		is.NoErr(err)
 
 		records := []opencdc.Record{
-			opencdc.Record{
+			{
 				Operation: opencdc.OperationUpdate,
 				Metadata:  opencdc.Metadata{"opencdc.collection": "singers"},
 				Key:       opencdc.StructuredData{"SingerID": 1},
@@ -196,7 +196,7 @@ func TestDestination_Write(t *testing.T) {
 		is.NoErr(err)
 
 		_, err = d.Write(ctx, []opencdc.Record{
-			opencdc.Record{
+			{
 				Operation: opencdc.OperationCreate,
 				Metadata:  opencdc.Metadata{"opencdc.collection": "singers"},
 				Key:       opencdc.StructuredData{"SingerID": 1},
@@ -226,7 +226,7 @@ func TestDestination_Write(t *testing.T) {
 		is.NoErr(err)
 
 		_, err = d.Write(ctx, []opencdc.Record{
-			opencdc.Record{
+			{
 				Operation: opencdc.OperationCreate,
 				Metadata:  opencdc.Metadata{"opencdc.collection": "singers"},
 			},

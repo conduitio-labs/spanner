@@ -39,7 +39,7 @@ type Writer struct {
 }
 
 // NewWriter creates new instance of the Writer.
-func NewWriter(ctx context.Context, client *spanner.Client, config Config) (*Writer, error) {
+func NewWriter(_ context.Context, client *spanner.Client, config Config) (*Writer, error) {
 	tableFn, err := config.TableFunction()
 	if err != nil {
 		return nil, fmt.Errorf("invalid table name or table function: %w", err)
@@ -68,8 +68,8 @@ func (w *Writer) Insert(ctx context.Context, record opencdc.Record) error {
 		return ErrNoPayload
 	}
 
-	var keys []string
-	var values []interface{}
+	keys := []string{}
+	values := []interface{}{}
 
 	for k, v := range payload {
 		keys = append(keys, k)
@@ -98,8 +98,8 @@ func (w *Writer) Update(ctx context.Context, record opencdc.Record) error {
 		return ErrNoPayload
 	}
 
-	var keys []string
-	var values []interface{}
+	keys := []string{}
+	values := []interface{}{}
 
 	for k, v := range payload {
 		keys = append(keys, k)
