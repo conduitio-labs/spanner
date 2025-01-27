@@ -24,8 +24,12 @@ import (
 	"github.com/conduitio/conduit-commons/opencdc"
 )
 
-// ErrNoPayload occurs when there's no payload to insert or update.
-var ErrNoPayload = errors.New("no payload")
+var (
+	// ErrNoPayload occurs when there's no payload to insert or update.
+	ErrNoPayload = errors.New("no payload")
+	// ErrCompositeKeysNotSupported occurs when there are more than one key in a Key map.
+	ErrCompositeKeysNotSupported = errors.New("composite keys not yet supported")
+)
 
 // Writer implements a writer logic for Spanner destination.
 type Writer struct {
@@ -74,7 +78,7 @@ func (w *Writer) Insert(ctx context.Context, record opencdc.Record) error {
 
 	mutation := spanner.Insert(table, keys, values)
 	if _, err := w.client.Apply(ctx, []*spanner.Mutation{mutation}); err != nil {
-		return fmt.Errorf("create: %w", err)
+		return fmt.Errorf("error create record: %w", err)
 	}
 	return nil
 }
@@ -102,9 +106,9 @@ func (w *Writer) Update(ctx context.Context, record opencdc.Record) error {
 		values = append(values, v)
 	}
 
-	mutation := spanner.Insert(table, keys, values)
+	mutation := spanner.Update(table, keys, values)
 	if _, err := w.client.Apply(ctx, []*spanner.Mutation{mutation}); err != nil {
-		return fmt.Errorf("create: %w", err)
+		return fmt.Errorf("error update record: %w", err)
 	}
 	return nil
 }
@@ -116,15 +120,25 @@ func (w *Writer) Delete(ctx context.Context, record opencdc.Record) error {
 		return err
 	}
 
-	key, err := w.structurizeData(record.Key)
+	keyMap, err := w.structurizeData(record.Key)
 	if err != nil {
 		return fmt.Errorf("structurize key: %w", err)
 	}
 
+	if len(keyMap) > 1 {
+		return ErrCompositeKeysNotSupported
+	}
+
+	var key interface{}
+	for _, v := range keyMap {
+		key = v
+	}
+
 	mutation := spanner.Delete(table, spanner.Key{key})
 	if _, err := w.client.Apply(ctx, []*spanner.Mutation{mutation}); err != nil {
-		return fmt.Errorf("delete: %w", err)
+		return fmt.Errorf("error delete record: %w", err)
 	}
+
 	return nil
 }
 

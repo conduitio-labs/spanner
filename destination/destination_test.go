@@ -22,7 +22,6 @@ import (
 
 	testutils "github.com/conduitio-labs/conduit-connector-spanner/test"
 	"github.com/conduitio/conduit-commons/opencdc"
-	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/matryer/is"
 )
 
@@ -101,20 +100,7 @@ func TestDestination_Open(t *testing.T) {
 func TestDestination_Write(t *testing.T) {
 	t.Parallel()
 
-	records := []opencdc.Record{
-		sdk.Util.Source.NewRecordCreate(
-			nil,
-			opencdc.Metadata{"opencdc.collection": "singers"},
-			opencdc.StructuredData{"SingerID": 1},
-			opencdc.StructuredData{
-				"SingerID":  "1",
-				"Name":      "jon",
-				"CreatedAt": time.Now().UTC(),
-			},
-		),
-	}
-
-	t.Run("destination write success", func(t *testing.T) {
+	t.Run("destination write insert success", func(t *testing.T) {
 		is := is.New(t)
 
 		ctx := context.Background()
@@ -131,6 +117,21 @@ func TestDestination_Write(t *testing.T) {
 
 		err = d.Open(ctx)
 		is.NoErr(err)
+
+		records := []opencdc.Record{
+			opencdc.Record{
+				Operation: opencdc.OperationCreate,
+				Metadata:  opencdc.Metadata{"opencdc.collection": "singers"},
+				Key:       opencdc.StructuredData{"SingerID": 1},
+				Payload: opencdc.Change{
+					After: opencdc.StructuredData{
+						"SingerID":  "1",
+						"Name":      "jon",
+						"CreatedAt": time.Now().UTC(),
+					},
+				},
+			},
+		}
 
 		n, err := d.Write(ctx, records)
 		is.NoErr(err)
@@ -139,7 +140,44 @@ func TestDestination_Write(t *testing.T) {
 		d.Teardown(ctx)
 	})
 
-	t.Run("destination write failure no payload", func(t *testing.T) {
+	t.Run("destination write update success", func(t *testing.T) {
+		is := is.New(t)
+
+		ctx := context.Background()
+		d := NewDestination()
+
+		err := d.Configure(ctx, map[string]string{
+			ConfigDatabase: fmt.Sprintf("projects/%s/instances/%s/databases/%s", testutils.ProjectID, testutils.InstanceID, testutils.DatabaseID),
+			ConfigEndpoint: "localhost:9010",
+		})
+		is.NoErr(err)
+
+		err = d.Open(ctx)
+		is.NoErr(err)
+
+		records := []opencdc.Record{
+			opencdc.Record{
+				Operation: opencdc.OperationUpdate,
+				Metadata:  opencdc.Metadata{"opencdc.collection": "singers"},
+				Key:       opencdc.StructuredData{"SingerID": 1},
+				Payload: opencdc.Change{
+					After: opencdc.StructuredData{
+						"SingerID":  "1",
+						"Name":      "jon",
+						"CreatedAt": time.Now().UTC(),
+					},
+				},
+			},
+		}
+
+		n, err := d.Write(ctx, records)
+		is.NoErr(err)
+		is.Equal(n, len(records))
+
+		d.Teardown(ctx)
+	})
+
+	t.Run("destination write insert failure no payload", func(t *testing.T) {
 		is := is.New(t)
 
 		ctx := context.Background()
@@ -158,19 +196,18 @@ func TestDestination_Write(t *testing.T) {
 		is.NoErr(err)
 
 		_, err = d.Write(ctx, []opencdc.Record{
-			sdk.Util.Source.NewRecordCreate(
-				nil,
-				opencdc.Metadata{"opencdc.collection": "singers"},
-				opencdc.StructuredData{"SingerID": 1},
-				nil,
-			),
+			opencdc.Record{
+				Operation: opencdc.OperationCreate,
+				Metadata:  opencdc.Metadata{"opencdc.collection": "singers"},
+				Key:       opencdc.StructuredData{"SingerID": 1},
+			},
 		})
 		is.Equal(err.Error(), `key {"SingerID":1}: no payload`)
 
 		d.Teardown(ctx)
 	})
 
-	t.Run("destination write failure record with no key", func(t *testing.T) {
+	t.Run("destination write insert failure record with no key", func(t *testing.T) {
 		is := is.New(t)
 
 		ctx := context.Background()
@@ -189,12 +226,10 @@ func TestDestination_Write(t *testing.T) {
 		is.NoErr(err)
 
 		_, err = d.Write(ctx, []opencdc.Record{
-			sdk.Util.Source.NewRecordCreate(
-				nil,
-				opencdc.Metadata{"opencdc.collection": "singers"},
-				nil,
-				nil,
-			),
+			opencdc.Record{
+				Operation: opencdc.OperationCreate,
+				Metadata:  opencdc.Metadata{"opencdc.collection": "singers"},
+			},
 		})
 		is.Equal(err.Error(), `record with no key: no payload`)
 
