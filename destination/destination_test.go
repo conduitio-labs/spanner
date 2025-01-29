@@ -102,9 +102,7 @@ func TestDestination_Write(t *testing.T) {
 
 	t.Run("destination write insert success", func(t *testing.T) {
 		is := is.New(t)
-
 		ctx := context.Background()
-
 		testutils.SetupDatabase(ctx, is)
 
 		d := NewDestination()
@@ -121,7 +119,7 @@ func TestDestination_Write(t *testing.T) {
 		records := []opencdc.Record{
 			{
 				Operation: opencdc.OperationCreate,
-				Metadata:  opencdc.Metadata{"opencdc.collection": "singers"},
+				Metadata:  opencdc.Metadata{"opencdc.collection": "Singers"},
 				Key:       opencdc.StructuredData{"SingerID": 1},
 				Payload: opencdc.Change{
 					After: opencdc.StructuredData{
@@ -142,7 +140,6 @@ func TestDestination_Write(t *testing.T) {
 
 	t.Run("destination write update success", func(t *testing.T) {
 		is := is.New(t)
-
 		ctx := context.Background()
 		d := NewDestination()
 
@@ -158,7 +155,7 @@ func TestDestination_Write(t *testing.T) {
 		records := []opencdc.Record{
 			{
 				Operation: opencdc.OperationUpdate,
-				Metadata:  opencdc.Metadata{"opencdc.collection": "singers"},
+				Metadata:  opencdc.Metadata{"opencdc.collection": "Singers"},
 				Key:       opencdc.StructuredData{"SingerID": 1},
 				Payload: opencdc.Change{
 					After: opencdc.StructuredData{
@@ -179,11 +176,7 @@ func TestDestination_Write(t *testing.T) {
 
 	t.Run("destination write insert failure no payload", func(t *testing.T) {
 		is := is.New(t)
-
 		ctx := context.Background()
-
-		testutils.SetupDatabase(ctx, is)
-
 		d := NewDestination()
 
 		err := d.Configure(ctx, map[string]string{
@@ -198,7 +191,7 @@ func TestDestination_Write(t *testing.T) {
 		_, err = d.Write(ctx, []opencdc.Record{
 			{
 				Operation: opencdc.OperationCreate,
-				Metadata:  opencdc.Metadata{"opencdc.collection": "singers"},
+				Metadata:  opencdc.Metadata{"opencdc.collection": "Singers"},
 				Key:       opencdc.StructuredData{"SingerID": 1},
 			},
 		})
@@ -209,11 +202,7 @@ func TestDestination_Write(t *testing.T) {
 
 	t.Run("destination write insert failure record with no key", func(t *testing.T) {
 		is := is.New(t)
-
 		ctx := context.Background()
-
-		testutils.SetupDatabase(ctx, is)
-
 		d := NewDestination()
 
 		err := d.Configure(ctx, map[string]string{
@@ -228,10 +217,39 @@ func TestDestination_Write(t *testing.T) {
 		_, err = d.Write(ctx, []opencdc.Record{
 			{
 				Operation: opencdc.OperationCreate,
-				Metadata:  opencdc.Metadata{"opencdc.collection": "singers"},
+				Metadata:  opencdc.Metadata{"opencdc.collection": "Singers"},
 			},
 		})
 		is.Equal(err.Error(), `record with no key: no payload`)
+
+		d.Teardown(ctx)
+	})
+
+	t.Run("destination write delete success", func(t *testing.T) {
+		is := is.New(t)
+		ctx := context.Background()
+		d := NewDestination()
+
+		err := d.Configure(ctx, map[string]string{
+			ConfigDatabase: fmt.Sprintf("projects/%s/instances/%s/databases/%s", testutils.ProjectID, testutils.InstanceID, testutils.DatabaseID),
+			ConfigEndpoint: "localhost:9010",
+		})
+		is.NoErr(err)
+
+		err = d.Open(ctx)
+		is.NoErr(err)
+
+		records := []opencdc.Record{
+			{
+				Operation: opencdc.OperationDelete,
+				Metadata:  opencdc.Metadata{"opencdc.collection": "Singers"},
+				Key:       opencdc.StructuredData{"SingerID": 1},
+			},
+		}
+
+		n, err := d.Write(ctx, records)
+		is.NoErr(err)
+		is.Equal(n, len(records))
 
 		d.Teardown(ctx)
 	})

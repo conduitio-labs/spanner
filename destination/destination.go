@@ -51,7 +51,6 @@ func (d *Destination) Configure(ctx context.Context, cfg config.Config) error {
 	if err != nil {
 		return fmt.Errorf("invalid config: %w", err)
 	}
-	d.config.Init()
 	sdk.Logger(ctx).Info().Msg("configured destination")
 	return nil
 }

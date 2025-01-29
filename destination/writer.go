@@ -17,25 +17,23 @@ package destination
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 
 	"cloud.google.com/go/spanner"
 	"github.com/conduitio/conduit-commons/opencdc"
 )
 
-var (
-	// ErrNoPayload occurs when there's no payload to insert or update.
-	ErrNoPayload = errors.New("no payload")
-	// ErrCompositeKeysNotSupported occurs when there are more than one key in a Key map.
-	ErrCompositeKeysNotSupported = errors.New("composite keys not yet supported")
-)
+type ColumnTypes map[string]string
 
 // Writer implements a writer logic for Spanner destination.
 type Writer struct {
 	client *spanner.Client
 	// Function to dynamically get table name for each record.
 	tableNameFunc TableFn
+	// Maps table names to their column types.
+	columnTypes map[string]ColumnTypes
+	// Schema name to write data into.
+	schema string
 }
 
 // NewWriter creates new instance of the Writer.
@@ -48,6 +46,8 @@ func NewWriter(_ context.Context, client *spanner.Client, config Config) (*Write
 	writer := &Writer{
 		client:        client,
 		tableNameFunc: tableFn,
+		schema:        config.Schema,
+		columnTypes:   make(map[string]ColumnTypes),
 	}
 
 	return writer, nil
@@ -129,9 +129,28 @@ func (w *Writer) Delete(ctx context.Context, record opencdc.Record) error {
 		return ErrCompositeKeysNotSupported
 	}
 
+	columnTypes, err := w.getColumnTypes(ctx, table)
+	if err != nil {
+		return err
+	}
+
 	var key interface{}
-	for _, v := range keyMap {
-		key = v
+	for k, v := range keyMap {
+		switch v := v.(type) {
+		case float64:
+			cType, ok := columnTypes[k]
+			if !ok {
+				return NewColumnNotFoundError(table, k)
+			}
+			if cType == "INT64" {
+				key = int64(v)
+			} else {
+				key = v
+			}
+
+		default:
+			key = v
+		}
 	}
 
 	mutation := spanner.Delete(table, spanner.Key{key})
@@ -162,4 +181,46 @@ func (w *Writer) structurizeData(data opencdc.Data) (opencdc.StructuredData, err
 	}
 
 	return structuredData, nil
+}
+
+// getColumnTypes returns column types from w.columnTypes, or queries the database if not exists.
+func (w *Writer) getColumnTypes(ctx context.Context, table string) (map[string]string, error) {
+	if columnTypes, ok := w.columnTypes[table]; ok {
+		return columnTypes, nil
+	}
+
+	query := fmt.Sprintf(`
+		SELECT column_name, spanner_type
+		FROM information_schema.columns
+		WHERE table_name = '%s' AND table_schema = '%s'`, table, w.schema)
+
+	iter := w.client.Single().Query(ctx, spanner.NewStatement(query))
+	defer iter.Stop()
+
+	column := 0
+	columnTypes := make(ColumnTypes)
+
+	for {
+		row, err := iter.Next()
+		if err != nil {
+			if err.Error() == "no more items in iterator" {
+				if column == 0 {
+					return nil, ErrNoColumnsFound
+				}
+				break
+			}
+			return nil, fmt.Errorf("failed to fetch column details: %w", err)
+		}
+
+		var columnName, columnType string
+		if err := row.Columns(&columnName, &columnType); err != nil {
+			return nil, fmt.Errorf("failed to read column details: %w", err)
+		}
+
+		columnTypes[columnName] = columnType
+		column++
+	}
+
+	w.columnTypes[table] = columnTypes
+	return columnTypes, nil
 }

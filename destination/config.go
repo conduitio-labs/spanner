@@ -31,16 +31,11 @@ type Config struct {
 	common.Config
 	// Table represents the spanner table to write data to.
 	Table string `json:"table" default:"{{ index .Metadata \"opencdc.collection\" }}"`
+	// Schema name to write data to.
+	Schema string `json:"schema"`
 }
 
 type TableFn func(opencdc.Record) (string, error)
-
-// Init sets lowercase "table" name if not a template.
-func (c Config) Init() {
-	if !c.isTableTemplate() {
-		c.Table = strings.ToLower(c.Table)
-	}
-}
 
 // isTableTemplate returns true if "table" contains a template placeholder.
 func (c Config) isTableTemplate() bool {

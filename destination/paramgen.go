@@ -10,6 +10,7 @@ import (
 const (
 	ConfigDatabase = "database"
 	ConfigEndpoint = "endpoint"
+	ConfigSchema   = "schema"
 	ConfigTable    = "table"
 )
 
@@ -26,6 +27,12 @@ func (Config) Parameters() map[string]config.Parameter {
 		ConfigEndpoint: {
 			Default:     "",
 			Description: "Endpoint is the URL for endpoint override - testing/dry-run only",
+			Type:        config.ParameterTypeString,
+			Validations: []config.Validation{},
+		},
+		ConfigSchema: {
+			Default:     "",
+			Description: "Schema name to write data to.",
 			Type:        config.ParameterTypeString,
 			Validations: []config.Validation{},
 		},
