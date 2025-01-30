@@ -51,6 +51,17 @@ with each key being a column and each value being that column's value.
 
 ## Destination
 
-(Planned)
+A destination connector reads data from a conduit source connector and writes it to
+spanner tables.
 
-![scarf pixel](https://static.scarf.sh/a.png?x-pxid=)
+### Configuration
+
+| name       | description                                                                                                                         | required | default value |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------- | -------- | ------------- |
+| `database` | The name of the database to use. A valid database name has the form projects/PROJECT_ID/instances/INSTANCE_ID/databases/DATABASE_ID | true     |               |
+| `table`   | The name of the table to write data to.                                                                                                | true     |               |
+| `schema`   | Schema name to write data to.                                                                                                | true     |               |
+| `endpoint` | The URL for endpoint override - testing/dry-run only                                                                                | false    |               |
+
+
+![scarf pixel](https://static.scarf.sh/a.png?x-pxid=0b3dbe6d-12de-4051-b4b9-38275009f5eb)
