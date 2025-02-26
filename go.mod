@@ -7,7 +7,7 @@ require (
 	cloud.google.com/go/spanner v1.73.0
 	github.com/cloudspannerecosystem/spanner-change-streams-tail v0.3.1
 	github.com/conduitio/conduit-commons v0.5.1
-	github.com/conduitio/conduit-connector-sdk v0.12.0
+	github.com/conduitio/conduit-connector-sdk v0.13.1
 	github.com/golangci/golangci-lint v1.64.5
 	github.com/google/go-cmp v0.7.0
 	github.com/matryer/is v1.4.1
@@ -41,7 +41,7 @@ require (
 	github.com/GoogleCloudPlatform/grpc-gcp-go/grpcgcp v1.5.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.25.0 // indirect
 	github.com/Masterminds/goutils v1.1.1 // indirect
-	github.com/Masterminds/semver/v3 v3.3.0 // indirect
+	github.com/Masterminds/semver/v3 v3.3.1 // indirect
 	github.com/Masterminds/sprig/v3 v3.3.0 // indirect
 	github.com/OpenPeeDeeP/depguard/v2 v2.2.0 // indirect
 	github.com/alecthomas/go-check-sumtype v0.3.1 // indirect
@@ -68,6 +68,9 @@ require (
 	github.com/ckaznocha/intrange v0.3.0 // indirect
 	github.com/cncf/xds/go v0.0.0-20240905190251-b4127c9b8d78 // indirect
 	github.com/conduitio/conduit-connector-protocol v0.9.0 // indirect
+	github.com/conduitio/evolviconf v0.1.0 // indirect
+	github.com/conduitio/evolviconf/evolviyaml v0.1.0 // indirect
+	github.com/conduitio/yaml/v3 v3.3.0 // indirect
 	github.com/curioswitch/go-reassign v0.3.0 // indirect
 	github.com/daixiang0/gci v0.13.5 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
@@ -95,7 +98,7 @@ require (
 	github.com/go-viper/mapstructure/v2 v2.2.1 // indirect
 	github.com/go-xmlfmt/xmlfmt v1.1.3 // indirect
 	github.com/gobwas/glob v0.2.3 // indirect
-	github.com/goccy/go-json v0.10.4 // indirect
+	github.com/goccy/go-json v0.10.5 // indirect
 	github.com/gofrs/flock v0.12.1 // indirect
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
@@ -187,6 +190,9 @@ require (
 	github.com/ryanrolds/sqlclosecheck v0.5.1 // indirect
 	github.com/sagikazarmark/locafero v0.6.0 // indirect
 	github.com/sagikazarmark/slog-shim v0.1.0 // indirect
+	github.com/samber/lo v1.47.0 // indirect
+	github.com/samber/slog-common v0.18.1 // indirect
+	github.com/samber/slog-zerolog/v2 v2.7.3 // indirect
 	github.com/sanposhiho/wastedassign/v2 v2.1.0 // indirect
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.1 // indirect
 	github.com/sashamelentyev/interfacebloat v1.1.0 // indirect
